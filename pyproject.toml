@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "youtube-cli"
+version = "0.1.0"
+description = "Product-grade YouTube CLI with login-aware feeds and download workflows"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "click>=8.1",
+  "PyYAML>=6.0",
+  "rich>=13.7",
+  "yt-dlp>=2026.3.3",
+]
+
+[project.scripts]
+youtube = "youtube_cli.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
