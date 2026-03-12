@@ -208,6 +208,7 @@ Agent output recommendation:
 - use `--json` for downstream systems that require exact JSON parsing
 - keep read commands narrow with `--limit`
 - treat write commands as two-step actions: `--dry-run` first, `--yes` second
+- this repository also includes a workspace-ready [`SKILL.md`](./SKILL.md) for agent-oriented use
 
 Recommended patterns:
 
@@ -217,6 +218,11 @@ youtube --yaml playlist-videos PLAYLIST_ID --limit 5
 youtube --json download --batch-file targets.txt --quality 360p
 youtube playlist-create "Agent Review Queue" --dry-run
 ```
+
+Release notes and version history:
+
+- [`CHANGELOG.md`](./CHANGELOG.md)
+- [`releases/`](./releases)
 
 ## Troubleshooting
 
@@ -460,6 +466,7 @@ error: null
 - 如果要对接严格 JSON 解析器，再用 `--json`
 - 读取类命令尽量配 `--limit`
 - 写操作建议先 `--dry-run`，确认后再 `--yes`
+- 仓库里已经附带可直接复用的 [`SKILL.md`](./SKILL.md)
 
 推荐模式：
 
@@ -469,6 +476,11 @@ youtube --yaml playlist-videos PLAYLIST_ID --limit 5
 youtube --json download --batch-file targets.txt --quality 360p
 youtube playlist-create "Agent Review Queue" --dry-run
 ```
+
+版本说明与发布正文可直接查看：
+
+- [`CHANGELOG.md`](./CHANGELOG.md)
+- [`releases/`](./releases)
 
 ## 故障排查
 

@@ -7,13 +7,35 @@ name = "youtube-cli"
 version = "0.1.1"
 description = "Product-grade YouTube CLI with login-aware feeds and download workflows"
 readme = "README.md"
+license = {file = "LICENSE"}
 requires-python = ">=3.11"
+keywords = ["youtube", "cli", "yt-dlp", "subtitles", "playlist", "automation"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Multimedia :: Video",
+  "Topic :: Utilities",
+]
 dependencies = [
   "click>=8.1",
   "PyYAML>=6.0",
   "rich>=13.7",
   "yt-dlp>=2026.3.3",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Che7seaChen/youtube-cli"
+Repository = "https://github.com/Che7seaChen/youtube-cli"
+Issues = "https://github.com/Che7seaChen/youtube-cli/issues"
+Releases = "https://github.com/Che7seaChen/youtube-cli/releases"
+Changelog = "https://github.com/Che7seaChen/youtube-cli/blob/main/CHANGELOG.md"
 
 [project.scripts]
 youtube = "youtube_cli.cli:main"
