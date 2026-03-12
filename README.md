@@ -49,8 +49,7 @@ pipx install youtube-cli
 Install from source:
 
 ```bash
-# Clone this repository first
-# Then enter the project directory
+git clone git@github.com:Che7seaChen/youtube-cli.git
 cd youtube-cli
 python -m pip install -e .
 youtube --help
@@ -290,8 +289,7 @@ pipx install youtube-cli
 从源码安装：
 
 ```bash
-# 先克隆当前仓库
-# 然后进入项目目录
+git clone git@github.com:Che7seaChen/youtube-cli.git
 cd youtube-cli
 python -m pip install -e .
 youtube --help
