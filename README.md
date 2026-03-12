@@ -496,8 +496,8 @@ export YOUTUBE_CLI_NO_CHECK_CERTIFICATE=1
 
 ## 致谢
 
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — 绝大多数读取、下载、字幕、Cookie 与 YouTube client 行为都建立在它的成熟能力之上
-- [bilibili-cli](https://github.com/jackwener/bilibili-cli) — 这个项目在命令面设计、产品化收口、结构化输出和 README 组织方式上给了很直接的参考
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — 读取、下载、字幕、Cookie 与 YouTube client 行为建立在其成熟能力之上
+- [bilibili-cli](https://github.com/jackwener/bilibili-cli) — 在命令面设计、产品化收口、结构化输出和 README 组织方式上给了很直接的参考
 - [Click](https://click.palletsprojects.com/) — CLI 框架
 - [Rich](https://github.com/Textualize/rich) — 人类可读终端输出
 - [FFmpeg](https://ffmpeg.org/) — 音视频后处理与格式转换
