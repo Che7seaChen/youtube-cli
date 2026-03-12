@@ -278,7 +278,7 @@ export YOUTUBE_CLI_NO_CHECK_CERTIFICATE=1
 
 - `aria2c`，可在部分场景提升下载速度
 
-如果你使用 macOS，可以先安装系统依赖：
+macOS 可先安装系统依赖：
 
 ```bash
 brew install ffmpeg
@@ -286,7 +286,7 @@ brew install ffmpeg
 brew install aria2
 ```
 
-如果已经发布到 PyPI，推荐使用隔离安装：
+如已经发布至 PyPI，推荐使用隔离安装：
 
 ```bash
 uv tool install youtube-cli
@@ -311,7 +311,7 @@ uv tool upgrade youtube-cli
 pipx upgrade youtube-cli
 ```
 
-> 提示：YouTube 的提取和下载链路变化很快，`yt-dlp` 版本过旧时更容易在格式、字幕或认证链路上失败。
+> 提示：YouTube 的提取和下载链路变化较快，`yt-dlp` 版本过旧时更容易在格式、字幕或认证链路上失败。
 
 ## 用法
 
@@ -390,7 +390,7 @@ youtube --yaml playlist-download PLAYLIST_ID --limit 2 --quality 360p
 
 ## 认证
 
-`youtube-cli` 采用比较实用的认证策略：
+`youtube-cli` 认证策略：
 
 1. **本地已保存配置** — `youtube login` 会把浏览器或 `cookies.txt` 的设置保存到本地
 2. **浏览器 Cookie** — 可以把 Chrome、Firefox 等浏览器作为认证来源
@@ -402,7 +402,7 @@ youtube --yaml playlist-download PLAYLIST_ID --limit 2 --quality 360p
 
 - 私有或受限 playlist
 - 订阅、收藏、稍后再看、历史、推荐、通知
-- `save-to-watch-later`、`playlist-add`、`playlist-create`、`playlist-delete` 这类写操作
+- `save-to-watch-later`、`playlist-add`、`playlist-create`、`playlist-delete` 这类写入操作
 
 推荐流程：
 
@@ -426,10 +426,10 @@ data: {}
 error: null
 ```
 
-这样做的好处是：
+好处在于：
 
-- 人看时默认输出尽量直接可读
-- 脚本和 AI agent 可以稳定读取 `ok / data / error`
+- 默认输出尽量直接可读
+- 脚本和 AI agent 可稳定读取 `ok / data / error`
 - 不会直接把上游原始返回结构暴露到命令层
 
 常见用法：
@@ -488,7 +488,7 @@ youtube --no-check-certificate status --check
 youtube --no-check-certificate playlist-create "Test Playlist" --privacy private --yes
 ```
 
-也可以给当前 shell 会话设置一次环境变量：
+也可给当前 shell 会话设置一次环境变量：
 
 ```bash
 export YOUTUBE_CLI_NO_CHECK_CERTIFICATE=1
@@ -496,7 +496,7 @@ export YOUTUBE_CLI_NO_CHECK_CERTIFICATE=1
 
 ## 致谢
 
-- [@yt-dlp/yt-dlp](https://github.com/yt-dlp/yt-dlp) — 绝大多数 YouTube 读取、下载、字幕、Cookie 与 client 兼容行为，都建立在它长期验证过的能力之上
+- [@yt-dlp/yt-dlp](https://github.com/yt-dlp/yt-dlp) — YouTube 读取、下载、字幕、Cookie 与 client 兼容行为，都建立在其长期验证过的能力之上
 - [@jackwener/bilibili-cli](https://github.com/jackwener/bilibili-cli) — 在命令面设计、产品化收口、结构化输出和 README 组织方式上，提供了非常直接且实用的参考
 - [@pallets/click](https://github.com/pallets/click) — 用于构建清晰、可组合、可维护的 CLI 命令体系
 - [@Textualize/rich](https://github.com/Textualize/rich) — 用于提供更清晰的人类可读终端输出和操作反馈
