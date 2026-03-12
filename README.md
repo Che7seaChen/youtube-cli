@@ -215,7 +215,7 @@ Recommended patterns:
 ```bash
 youtube --yaml search "openai" --type channel --limit 3
 youtube --yaml playlist-videos PLAYLIST_ID --limit 5
-youtube --json download --batch-file targets.txt --quality 360p
+youtube --json download --batch-file targets.txt --quality 1080p
 youtube playlist-create "Agent Review Queue" --dry-run
 ```
 
@@ -473,7 +473,7 @@ error: null
 ```bash
 youtube --yaml search "openai" --type channel --limit 3
 youtube --yaml playlist-videos PLAYLIST_ID --limit 5
-youtube --json download --batch-file targets.txt --quality 360p
+youtube --json download --batch-file targets.txt --quality 1080p
 youtube playlist-create "Agent Review Queue" --dry-run
 ```
 
