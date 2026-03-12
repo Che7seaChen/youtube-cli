@@ -10,12 +10,14 @@
 - Added `playlist-create` and `playlist-delete` to complete playlist workflows
 - Download flow now supports quality selection, batch files, manifest resume, bilingual subtitles, and optional `aria2c`
 - Subtitle export is decoupled from main downloads: subtitle failure does not fail the main video / audio task
+- Repeated `save-to-watch-later` / `playlist-add` operations now return a clear already-exists status instead of exposing a raw HTTP 409
 - Authenticated subtitle and download flows follow `yt-dlp` behavior and support `--use-auth` when needed
 
 - 新增 `playlist-download`，可以直接下载整个 playlist
 - 新增 `playlist-create` 和 `playlist-delete`，playlist 工作流正式闭环
 - 下载链路支持清晰度选择、批量文件、manifest 恢复、双语字幕和可选 `aria2c`
 - 字幕导出与主下载解耦，字幕失败不会把视频 / 音频主任务标成失败
+- `save-to-watch-later` / `playlist-add` 在重复添加时不再暴露原始 HTTP 409，而是返回清晰的已存在状态
 - 认证态字幕与下载链路遵循 `yt-dlp` 的成熟行为，需要时可显式加 `--use-auth`
 
 ## What You Can Do / 当前可用能力
@@ -105,3 +107,11 @@ Or set this once for the current shell session:
 ```bash
 export YOUTUBE_CLI_NO_CHECK_CERTIFICATE=1
 ```
+
+## Thanks / 致谢
+
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp)
+- [bilibili-cli](https://github.com/jackwener/bilibili-cli)
+- [Click](https://click.palletsprojects.com/)
+- [Rich](https://github.com/Textualize/rich)
+- [FFmpeg](https://ffmpeg.org/)

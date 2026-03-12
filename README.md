@@ -242,6 +242,14 @@ Or set it once for the current shell session:
 export YOUTUBE_CLI_NO_CHECK_CERTIFICATE=1
 ```
 
+## Acknowledgements
+
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — the download, subtitle, cookie, and YouTube client behavior foundation behind most read and download workflows
+- [bilibili-cli](https://github.com/jackwener/bilibili-cli) — inspiration for command surface design, product framing, structured output, and README organization
+- [Click](https://click.palletsprojects.com/) — command-line interface framework
+- [Rich](https://github.com/Textualize/rich) — terminal rendering for human-readable output
+- [FFmpeg](https://ffmpeg.org/) — media post-processing and format handling
+
 ---
 
 ## 功能特性
@@ -485,3 +493,11 @@ youtube --no-check-certificate playlist-create "Test Playlist" --privacy private
 ```bash
 export YOUTUBE_CLI_NO_CHECK_CERTIFICATE=1
 ```
+
+## 致谢
+
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — 绝大多数读取、下载、字幕、Cookie 与 YouTube client 行为都建立在它的成熟能力之上
+- [bilibili-cli](https://github.com/jackwener/bilibili-cli) — 这个项目在命令面设计、产品化收口、结构化输出和 README 组织方式上给了很直接的参考
+- [Click](https://click.palletsprojects.com/) — CLI 框架
+- [Rich](https://github.com/Textualize/rich) — 人类可读终端输出
+- [FFmpeg](https://ffmpeg.org/) — 音视频后处理与格式转换

@@ -283,7 +283,8 @@ playlist_id: "PL..."
 playlist_url: "https://www.youtube.com/playlist?list=PL..."
 dry_run: false
 response:
-  status: null
+  status: "STATUS_SUCCEEDED"
+  already_exists: false
   logged_out: false
   keys:
     - "command"
@@ -310,6 +311,7 @@ response:
 - `download` 命令输出 `DownloadTask` 或 `DownloadTask[]`
   - `subtitle_files` 与 `subtitle_error` 只描述附加字幕导出结果，不影响视频/音频主任务的成功判定
 - `save-to-watch-later` 与 `playlist-add` 输出 `PlaylistEditResult`
+  - 对重复添加场景，命令会返回 `ok: true`，并在 `response.status` 中标记 `STATUS_ALREADY_EXISTS`
 - `playlist-create` 输出 `PlaylistCreateResult`
 - `playlist-delete` 输出 `PlaylistDeleteResult`
 - `subtitles` 命令输出 `Transcript`

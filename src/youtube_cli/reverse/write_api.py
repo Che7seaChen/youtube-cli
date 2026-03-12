@@ -273,6 +273,16 @@ class YoutubeWriteClient:
                 raw = response.read().decode("utf-8", errors="replace")
         except urllib.error.HTTPError as exc:
             body = exc.read().decode("utf-8", errors="replace")
+            if exc.code == 409 and self._is_add_video_conflict(actions):
+                return {
+                    "status": "STATUS_ALREADY_EXISTS",
+                    "responseContext": {
+                        "mainAppWebResponseContext": {
+                            "loggedOut": False,
+                        }
+                    },
+                    "error": self._summarize_http_error(body),
+                }
             playlist_context = self._describe_playlist_target(playlist_id, opener=opener)
             hint_parts: list[str] = []
             if playlist_context.get("title"):
@@ -322,12 +332,36 @@ class YoutubeWriteClient:
             "status": response.get("status"),
             "keys": sorted(response.keys()),
         }
+        if response.get("status") == "STATUS_ALREADY_EXISTS":
+            summary["already_exists"] = True
         logged_out = response.get("responseContext", {}).get("mainAppWebResponseContext", {}).get("loggedOut")
         if isinstance(logged_out, bool):
             summary["logged_out"] = logged_out
         if response.get("playlistId"):
             summary["playlist_id"] = response["playlistId"]
         return summary
+
+    def _summarize_http_error(self, body_text: str) -> dict[str, Any] | None:
+        if not body_text:
+            return None
+        try:
+            data = json.loads(body_text)
+        except json.JSONDecodeError:
+            return {"raw": body_text[:200]}
+        error = data.get("error")
+        if not isinstance(error, dict):
+            return {"raw": body_text[:200]}
+        errors = error.get("errors")
+        first_error = errors[0] if isinstance(errors, list) and errors and isinstance(errors[0], dict) else {}
+        return {
+            "code": error.get("code"),
+            "message": error.get("message"),
+            "reason": first_error.get("reason"),
+            "domain": first_error.get("domain"),
+        }
+
+    def _is_add_video_conflict(self, actions: list[dict[str, Any]]) -> bool:
+        return any(action.get("action") == "ACTION_ADD_VIDEO" for action in actions if isinstance(action, dict))
 
     def _generate_api_headers(
         self,

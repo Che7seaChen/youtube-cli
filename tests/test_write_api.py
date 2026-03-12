@@ -160,6 +160,35 @@ class YoutubeWriteClientTests(unittest.TestCase):
         self.assertIn("页面所有者: zaharaEnglish", ctx.exception.hint or "")
         self.assertIn("不是当前账号自建列表", ctx.exception.hint or "")
 
+    def test_playlist_edit_http_409_duplicate_add_returns_already_exists(self) -> None:
+        jar = http.cookiejar.CookieJar()
+        opener = Mock()
+        opener.open.side_effect = urllib.error.HTTPError(
+            url="https://www.youtube.com/youtubei/v1/browse/edit_playlist",
+            code=409,
+            msg="Conflict",
+            hdrs=None,
+            fp=io.BytesIO(
+                b'{"error":{"code":409,"message":"Sorry, something went wrong.","errors":[{"message":"Sorry, something went wrong.","domain":"global","reason":"conflict"}]}}'
+            ),
+        )
+
+        with patch.object(self.client, "_load_cookie_jar", return_value=jar):
+            with patch.object(self.client, "_build_opener", return_value=opener):
+                with patch.object(self.client, "_fetch_html", return_value="<html></html>"):
+                    with patch.object(
+                        self.client,
+                        "_extract_ytcfg",
+                        return_value={"INNERTUBE_API_KEY": "key", "INNERTUBE_CONTEXT": {"client": {}}},
+                    ):
+                        payload = self.client.add_to_watch_later(
+                            "dQw4w9WgXcQ",
+                            dry_run=False,
+                        )
+
+        self.assertEqual(payload["response"]["status"], "STATUS_ALREADY_EXISTS")
+        self.assertTrue(payload["response"]["already_exists"])
+
     def test_fetch_html_wraps_tls_failure(self) -> None:
         opener = Mock()
         opener.open.side_effect = urllib.error.URLError(
