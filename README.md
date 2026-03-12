@@ -110,7 +110,7 @@ youtube recommendations --limit 20
 youtube notifications --limit 20
 
 # Video downloads
-youtube download "https://www.youtube.com/watch?v=VIDEO_ID" --quality 360p
+youtube download "https://www.youtube.com/watch?v=VIDEO_ID" --quality 1080p
 youtube download "https://www.youtube.com/watch?v=VIDEO_ID" --format "bv*+ba/b"
 youtube download "https://www.youtube.com/watch?v=VIDEO_ID" --write-subs --sub-lang en --sub-lang zh-CN
 youtube download "https://www.youtube.com/watch?v=VIDEO_ID" --write-subs --prefer-auto-subs
@@ -141,7 +141,7 @@ youtube save-to-watch-later "https://www.youtube.com/watch?v=VIDEO_ID" --dry-run
 # Structured output
 youtube --json video "https://www.youtube.com/watch?v=VIDEO_ID"
 youtube --yaml search "openai" --type channel --limit 3
-youtube --yaml playlist-download PLAYLIST_ID --limit 2 --quality 360p
+youtube --yaml playlist-download PLAYLIST_ID --limit 2 --quality 1080p
 ```
 
 ## Authentication
@@ -364,7 +364,7 @@ youtube recommendations --limit 20
 youtube notifications --limit 20
 
 # 视频下载
-youtube download "https://www.youtube.com/watch?v=VIDEO_ID" --quality 360p
+youtube download "https://www.youtube.com/watch?v=VIDEO_ID" --quality 1080p
 youtube download "https://www.youtube.com/watch?v=VIDEO_ID" --format "bv*+ba/b"
 youtube download "https://www.youtube.com/watch?v=VIDEO_ID" --write-subs --sub-lang en --sub-lang zh-CN
 youtube download "https://www.youtube.com/watch?v=VIDEO_ID" --write-subs --prefer-auto-subs
@@ -395,7 +395,7 @@ youtube save-to-watch-later "https://www.youtube.com/watch?v=VIDEO_ID" --dry-run
 # 结构化输出
 youtube --json video "https://www.youtube.com/watch?v=VIDEO_ID"
 youtube --yaml search "openai" --type channel --limit 3
-youtube --yaml playlist-download PLAYLIST_ID --limit 2 --quality 360p
+youtube --yaml playlist-download PLAYLIST_ID --limit 2 --quality 1080p
 ```
 
 ## 认证
