@@ -1,5 +1,9 @@
 # youtube-cli
 
+[![CI](https://github.com/Che7seaChen/youtube-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/Che7seaChen/youtube-cli/actions/workflows/ci.yml)
+![Python versions](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)
+![License](https://img.shields.io/badge/license-Apache%202.0-blue)
+
 A CLI for YouTube — browse videos, channels, playlists, account feeds, and download content from the terminal.
 
 [English](#features) | [中文](#功能特性)
