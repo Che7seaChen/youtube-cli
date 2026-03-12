@@ -463,7 +463,7 @@ youtube playlist-create "Agent Review Queue" --dry-run
 - `auth_required` — 先运行 `youtube login --browser chrome --check`，必要时对命令加 `--use-auth`
 - `tls_error` — 检查本地证书链；如果处在受限网络环境，可改用 `--no-check-certificate`
 - `network_error` — 检查网络、DNS、代理或当前环境是否能访问 YouTube
-- `rate_limited` — 当前请求被限流，先降低频率并稍后再试；部分情况下 `--use-auth` 会更稳
+- `rate_limited` — 当前请求被限流，先降低频率并稍后再试；部分情况下采用 `--use-auth` 
 - `download_failed` — 先用 `youtube formats <url>` 看可用格式，再尝试 `--use-auth` 或 `aria2c`
 - `not_found` — 检查视频、playlist 或频道的 URL / ID 是否正确
 
@@ -473,7 +473,7 @@ youtube playlist-create "Agent Review Queue" --dry-run
 - 字幕导出失败不会把主视频 / 音频下载标成失败
 - `--resume-failed` 会复用本地 manifest，并自动跳过已经完成的目标
 
-如果当前机器存在 TLS 证书链问题，可以这样临时绕过：
+如果当前机器存在 TLS 证书链问题，可临时绕过：
 
 ```bash
 youtube --no-check-certificate status --check
