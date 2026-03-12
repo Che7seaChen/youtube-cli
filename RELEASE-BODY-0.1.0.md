@@ -110,8 +110,8 @@ export YOUTUBE_CLI_NO_CHECK_CERTIFICATE=1
 
 ## Thanks / 致谢
 
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp)
-- [bilibili-cli](https://github.com/jackwener/bilibili-cli)
-- [Click](https://click.palletsprojects.com/)
-- [Rich](https://github.com/Textualize/rich)
-- [FFmpeg](https://ffmpeg.org/)
+- [@yt-dlp/yt-dlp](https://github.com/yt-dlp/yt-dlp) — the upstream foundation for YouTube extraction, downloads, subtitles, cookies, and client compatibility
+- [@jackwener/bilibili-cli](https://github.com/jackwener/bilibili-cli) — a practical reference for command design, structured output, and public-facing CLI documentation
+- [@pallets/click](https://github.com/pallets/click) — the command-line framework used to shape the CLI surface
+- [@Textualize/rich](https://github.com/Textualize/rich) — terminal rendering support for readable operator output
+- [@FFmpeg/FFmpeg](https://github.com/FFmpeg/FFmpeg) — media post-processing and format handling

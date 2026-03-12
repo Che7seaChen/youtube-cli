@@ -244,11 +244,11 @@ export YOUTUBE_CLI_NO_CHECK_CERTIFICATE=1
 
 ## Acknowledgements
 
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — the download, subtitle, cookie, and YouTube client behavior foundation behind most read and download workflows
-- [bilibili-cli](https://github.com/jackwener/bilibili-cli) — inspiration for command surface design, product framing, structured output, and README organization
-- [Click](https://click.palletsprojects.com/) — command-line interface framework
-- [Rich](https://github.com/Textualize/rich) — terminal rendering for human-readable output
-- [FFmpeg](https://ffmpeg.org/) — media post-processing and format handling
+- [@yt-dlp/yt-dlp](https://github.com/yt-dlp/yt-dlp) — the primary upstream foundation for YouTube extraction, download behavior, subtitles, cookies, and client compatibility handling
+- [@jackwener/bilibili-cli](https://github.com/jackwener/bilibili-cli) — a strong reference for CLI product framing, command surface design, structured output, and README organization
+- [@pallets/click](https://github.com/pallets/click) — the command-line framework used to keep the command tree explicit, composable, and maintainable
+- [@Textualize/rich](https://github.com/Textualize/rich) — terminal rendering support for cleaner human-readable output and clearer operator feedback
+- [@FFmpeg/FFmpeg](https://github.com/FFmpeg/FFmpeg) — media muxing, post-processing, and format conversion support across download workflows
 
 ---
 
@@ -496,8 +496,8 @@ export YOUTUBE_CLI_NO_CHECK_CERTIFICATE=1
 
 ## 致谢
 
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — 读取、下载、字幕、Cookie 与 YouTube client 行为建立在其成熟能力之上
-- [bilibili-cli](https://github.com/jackwener/bilibili-cli) — 在命令面设计、产品化收口、结构化输出和 README 组织方式上给了很直接的参考
-- [Click](https://click.palletsprojects.com/) — CLI 框架
-- [Rich](https://github.com/Textualize/rich) — 人类可读终端输出
-- [FFmpeg](https://ffmpeg.org/) — 音视频后处理与格式转换
+- [@yt-dlp/yt-dlp](https://github.com/yt-dlp/yt-dlp) — 绝大多数 YouTube 读取、下载、字幕、Cookie 与 client 兼容行为，都建立在它长期验证过的能力之上
+- [@jackwener/bilibili-cli](https://github.com/jackwener/bilibili-cli) — 在命令面设计、产品化收口、结构化输出和 README 组织方式上，提供了非常直接且实用的参考
+- [@pallets/click](https://github.com/pallets/click) — 用于构建清晰、可组合、可维护的 CLI 命令体系
+- [@Textualize/rich](https://github.com/Textualize/rich) — 用于提供更清晰的人类可读终端输出和操作反馈
+- [@FFmpeg/FFmpeg](https://github.com/FFmpeg/FFmpeg) — 用于下载链路中的音视频封装、后处理与格式转换
