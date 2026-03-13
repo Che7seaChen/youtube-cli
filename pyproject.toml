@@ -30,6 +30,11 @@ dependencies = [
   "yt-dlp>=2026.3.3",
 ]
 
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2",
+]
+
 [project.urls]
 Homepage = "https://github.com/Che7seaChen/youtube-cli"
 Repository = "https://github.com/Che7seaChen/youtube-cli"
