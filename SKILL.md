@@ -29,7 +29,10 @@ Use this skill when the user asks to:
 ## Authentication
 
 - Check auth state with `youtube status --check`.
-- Set up auth with `youtube login --browser chrome --check` or a cookies file.
+- Set up auth with `youtube login --browser chrome --check` (local browser) or a cookies file.
+- One-step export: `youtube login --export-cookies /path/to/cookies.txt --check` (opens YouTube, waits for login, then saves Netscape cookies).
+- The export flow defaults to incognito/private windows; use `--no-incognito` to disable.
+- Headless/VPS: export on a machine with a GUI, then `youtube login --cookies /path/to/cookies.txt --check`.
 - Most public metadata and downloads do not require login.
 
 ## TLS workaround

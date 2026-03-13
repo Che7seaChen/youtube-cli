@@ -10,10 +10,12 @@ import sys
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
+from http.cookiejar import MozillaCookieJar
 from pathlib import Path
 from typing import Any
 
 import yt_dlp
+import yt_dlp.cookies
 
 from ..config import AuthConfig
 from ..errors import YoutubeCliError, map_provider_error
@@ -174,6 +176,52 @@ class YtDlpProvider:
             "container": self.auth.container if self.auth else None,
             "cookies_file": self.auth.cookies_file if self.auth else None,
             "no_check_certificate": self.no_check_certificate,
+        }
+
+    def export_cookies(self, output_path: Path) -> dict[str, Any]:
+        if not self.auth or not self.auth.browser:
+            raise YoutubeCliError(
+                "auth_required",
+                "导出 cookies 需要浏览器登录态。",
+                hint="先运行 `youtube login --browser chrome` 并确保已登录。",
+                source="yt_dlp",
+            )
+        cookies_from_browser = self._cookies_from_browser()
+        if not cookies_from_browser:
+            raise YoutubeCliError(
+                "auth_required",
+                "无法读取浏览器 Cookie。",
+                hint="检查浏览器名称、profile 或 container 是否正确。",
+                source="yt_dlp",
+            )
+        try:
+            cookie_jar = yt_dlp.cookies.load_cookies(None, cookies_from_browser)
+        except Exception as exc:  # pragma: no cover - exercised via live validation
+            raise YoutubeCliError(
+                "auth_required",
+                "无法读取浏览器 Cookie，当前登录态不可用于导出。",
+                hint="确认浏览器已登录 YouTube，或尝试指定正确的 profile/container。",
+                source="yt_dlp",
+            ) from exc
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        export_jar = MozillaCookieJar()
+        count = 0
+        for cookie in cookie_jar:
+            export_jar.set_cookie(cookie)
+            count += 1
+        try:
+            export_jar.save(str(output_path), ignore_discard=True, ignore_expires=True)
+        except OSError as exc:
+            raise YoutubeCliError(
+                "config_write_failed",
+                f"无法写入 cookies 文件: {output_path}",
+                hint="检查路径权限，或换到可写目录后重试。",
+                source="yt_dlp",
+            ) from exc
+        return {
+            "exported": True,
+            "path": str(output_path),
+            "cookie_count": count,
         }
 
     def validate_auth(self) -> dict[str, Any]:

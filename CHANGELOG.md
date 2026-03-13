@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.2] - 2026-03-14
+
+### Added
+
+- Added `youtube login --export-cookies` to export Netscape cookies.txt directly from a logged-in browser (中文：新增浏览器直接导出 cookies.txt 的登录流程).
+- Defaulted login page launch to incognito/private windows with safe fallback to normal windows (中文：默认尝试无痕/隐身窗口打开登录页，失败自动回退普通窗口).
+- Added headless detection to block auto-login flow and guide users to cookies export (中文：无头环境阻止自动打开登录页并引导改用 cookies 导出).
+- Documented headless/VPS auth flow and export guidance in README and SKILL.md (中文：补充无头/VPS 登录态流程与导出说明).
+
 ## [0.1.1] - 2026-03-13
 
 ### Fixed

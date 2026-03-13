@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import os
 import shlex
+import shutil
+import subprocess
+import sys
+import webbrowser
 from pathlib import Path
 from typing import Any
 
@@ -46,6 +51,107 @@ def _run(ctx: AppContext, command: str, fn: Any) -> None:
         emit_error(exc, command=command, output_format=ctx.output_format)
         return
     emit(data, command=command, output_format=ctx.output_format)
+
+
+def _run_silently(cmd: list[str]) -> bool:
+    try:
+        subprocess.run(
+            cmd,
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return True
+    except Exception:
+        return False
+
+
+def _open_incognito(browser: str, url: str) -> bool:
+    name = (browser or "").lower()
+    if sys.platform == "darwin":
+        mac_apps = {
+            "chrome": ("Google Chrome", ["--incognito"]),
+            "google-chrome": ("Google Chrome", ["--incognito"]),
+            "edge": ("Microsoft Edge", ["--inprivate"]),
+            "msedge": ("Microsoft Edge", ["--inprivate"]),
+            "brave": ("Brave Browser", ["--incognito"]),
+            "firefox": ("Firefox", ["-private-window"]),
+        }
+        app = mac_apps.get(name)
+        if app:
+            app_name, args = app
+            return _run_silently(["open", "-a", app_name, "--args", *args, url])
+        return False
+
+    if sys.platform.startswith("win"):
+        win_targets = {
+            "chrome": ["chrome", "--incognito", url],
+            "google-chrome": ["chrome", "--incognito", url],
+            "edge": ["msedge", "--inprivate", url],
+            "msedge": ["msedge", "--inprivate", url],
+            "brave": ["brave", "--incognito", url],
+            "firefox": ["firefox", "-private-window", url],
+        }
+        cmd = win_targets.get(name)
+        if cmd:
+            return _run_silently(["cmd", "/c", "start", "", *cmd])
+        return False
+
+    linux_bins = {
+        "chrome": ["google-chrome", "chrome", "chromium", "chromium-browser"],
+        "google-chrome": ["google-chrome", "chrome"],
+        "chromium": ["chromium", "chromium-browser"],
+        "edge": ["microsoft-edge", "msedge"],
+        "msedge": ["microsoft-edge", "msedge"],
+        "brave": ["brave-browser", "brave"],
+        "firefox": ["firefox"],
+    }
+    incognito_args = {
+        "chrome": ["--incognito"],
+        "google-chrome": ["--incognito"],
+        "chromium": ["--incognito"],
+        "edge": ["--inprivate"],
+        "msedge": ["--inprivate"],
+        "brave": ["--incognito"],
+        "firefox": ["-private-window"],
+    }
+    candidates = linux_bins.get(name)
+    if not candidates:
+        candidates = (
+            linux_bins.get("chrome", [])
+            + linux_bins.get("edge", [])
+            + linux_bins.get("brave", [])
+            + linux_bins.get("firefox", [])
+        )
+    for binary in candidates:
+        path = shutil.which(binary)
+        if not path:
+            continue
+        args = incognito_args.get(name) or incognito_args.get(
+            "firefox" if "firefox" in binary else "chrome",
+            ["--incognito"],
+        )
+        if _run_silently([path, *args, url]):
+            return True
+    return False
+
+
+def _open_login_page(browser: str, *, incognito: bool) -> bool:
+    url = "https://www.youtube.com/"
+    if incognito and _open_incognito(browser, url):
+        return True
+    return webbrowser.open(url)
+
+
+def _is_headless() -> bool:
+    if sys.platform == "darwin":
+        return False
+    if sys.platform.startswith("win"):
+        return False
+    return not (
+        (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+        and shutil.which("xdg-open")
+    )
 
 
 def _require_write_confirmation(yes: bool, dry_run: bool) -> None:
@@ -95,6 +201,26 @@ def status(ctx: AppContext, check: bool) -> None:
 @click.option("--profile", default=None, help="浏览器 profile 名称或路径。")
 @click.option("--container", default=None, help="Firefox container 名称。")
 @click.option("--cookies", "cookies_file", default=None, type=click.Path(exists=True), help="直接指定 cookies.txt 文件。")
+@click.option(
+    "--export-cookies",
+    "export_cookies",
+    default=None,
+    type=click.Path(),
+    help="从浏览器导出 Netscape cookies.txt 到指定路径（完成登录后按提示继续）。",
+)
+@click.option(
+    "--open-login/--no-open-login",
+    default=True,
+    show_default=True,
+    help="导出 cookies 前是否自动打开 YouTube 登录页。",
+)
+@click.option(
+    "--incognito/--no-incognito",
+    default=True,
+    show_default=True,
+    help="打开登录页时优先使用无痕/隐身窗口（失败则回退到普通窗口）。",
+)
+@click.option("--yes", is_flag=True, help="跳过导出 cookies 的确认提示。")
 @click.option("--check", is_flag=True, help="保存后立即验证登录态。")
 @pass_context
 def login(
@@ -103,15 +229,68 @@ def login(
     profile: str | None,
     container: str | None,
     cookies_file: str | None,
+    export_cookies: str | None,
+    open_login: bool,
+    incognito: bool,
+    yes: bool,
     check: bool,
 ) -> None:
     def action() -> dict[str, Any]:
-        auth = AuthConfig(
-            browser=None if cookies_file else browser,
-            profile=profile,
-            container=container,
-            cookies_file=cookies_file,
-        )
+        if export_cookies and cookies_file:
+            raise click.ClickException("`--export-cookies` 不能与 `--cookies` 同时使用。")
+        export_path = Path(export_cookies).expanduser() if export_cookies else None
+        if export_path:
+            if not yes:
+                confirm = click.confirm(
+                    f"将从浏览器导出 cookies 并写入: {export_path}\n继续吗？",
+                    default=False,
+                )
+                if not confirm:
+                    return {
+                        "saved": False,
+                        "exported": False,
+                        "cancelled": True,
+                    }
+            if open_login:
+                if _is_headless():
+                    click.echo("检测到当前环境可能为无头模式，无法自动打开登录页。")
+                    click.echo("请在可登录浏览器的机器导出 cookies，再上传并使用 `youtube login --cookies <path> --check`。")
+                    raise YoutubeCliError(
+                        "auth_required",
+                        "无头环境无法自动引导浏览器登录。",
+                        hint="改用 `youtube login --cookies <path> --check`。",
+                        source="youtube_cli",
+                    )
+                opened = _open_login_page(browser, incognito=incognito)
+                if not opened:
+                    click.echo("无法自动打开浏览器，请手动访问 https://www.youtube.com/ 并登录。")
+            click.echo("请完成登录后按 Enter 继续导出 cookies（建议使用无痕/隐身窗口）。")
+            click.pause()
+            export_auth = AuthConfig(
+                browser=browser,
+                profile=profile,
+                container=container,
+                cookies_file=None,
+            )
+            exporter = ctx.provider.__class__(
+                export_auth,
+                no_check_certificate=ctx.no_check_certificate,
+            )
+            export_info = exporter.export_cookies(export_path)
+            auth = AuthConfig(
+                browser=None,
+                profile=None,
+                container=None,
+                cookies_file=str(export_path),
+            )
+        else:
+            export_info = None
+            auth = AuthConfig(
+                browser=None if cookies_file else browser,
+                profile=profile,
+                container=container,
+                cookies_file=cookies_file,
+            )
         ctx.config.auth = auth
         path = save_config(ctx.config)
         data: dict[str, Any] = {
@@ -120,6 +299,8 @@ def login(
             "auth": auth_summary(auth),
             "no_check_certificate": ctx.no_check_certificate,
         }
+        if export_info:
+            data["cookies_export"] = export_info
         if check:
             data["validation"] = ctx.provider.__class__(
                 auth,

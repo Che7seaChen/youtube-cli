@@ -168,6 +168,38 @@ youtube status --check
 youtube playlist-download PLAYLIST_ID --use-auth
 ```
 
+Export cookies to a file (no browser extension required):
+
+```bash
+youtube login --export-cookies ~/Downloads/youtube-cookies.txt --check
+youtube status --check
+```
+
+This will open YouTube in your browser and wait for you to finish login. It will try to open an incognito/private window by default and fall back to a normal window if needed. Use `--no-incognito` to disable.
+
+### VPS / Headless Auth (cookies.txt)
+
+If your environment cannot access browser cookies (VPS, CI, openclaw, etc.), use a cookies file:
+
+1. On a machine with a logged-in browser, export a Netscape `cookies.txt`.
+   - Prefer a fresh incognito session to reduce cookie rotation.
+2. Upload it to the VPS and lock permissions:
+
+```bash
+scp cookies.txt vps:/home/USER/youtube-cookies.txt
+chmod 600 /home/USER/youtube-cookies.txt
+```
+
+3. Point the CLI to the cookies file and verify:
+
+```bash
+youtube login --cookies /home/USER/youtube-cookies.txt --check
+youtube status --check
+```
+
+Use `--use-auth` when a read command requires login. All write actions require a valid auth state.
+If the VPS has no GUI login, export cookies on another machine first (see above), then upload the file.
+
 ## Structured Output
 
 All `--json` and `--yaml` responses use the normalized envelope defined in [SCHEMA.md](./SCHEMA.md):
@@ -224,9 +256,15 @@ Release notes and version history:
 - [`CHANGELOG.md`](./CHANGELOG.md)
 - [`releases/`](./releases)
 
+## FAQ
+
+- In headless or no-browser environments, do not use `--browser`. Use `--cookies` instead.
+
 ## Troubleshooting
 
 - `auth_required` — run `youtube login --browser chrome --check`, then retry with `--use-auth` if needed
+- `auth_required` (headless) — export cookies on a machine with a browser and use `youtube login --cookies <path> --check`
+- `auth_required` (export) — headless environments cannot open a login page; export cookies elsewhere and retry
 - `tls_error` — check your local certificate chain; if you are in a restricted network environment, retry with `--no-check-certificate`
 - `network_error` — verify network, DNS, proxy, or YouTube reachability
 - `rate_limited` — reduce request frequency and retry later; for some cases, using `--use-auth` helps
@@ -422,6 +460,38 @@ youtube status --check
 youtube playlist-download PLAYLIST_ID --use-auth
 ```
 
+导出 cookies 文件（无需浏览器插件）：
+
+```bash
+youtube login --export-cookies ~/Downloads/youtube-cookies.txt --check
+youtube status --check
+```
+
+命令会打开 YouTube 登录页并等待确认，默认尝试无痕/隐身窗口，失败则回退到普通窗口。可用 `--no-incognito` 关闭。
+
+### VPS / 无头环境认证（cookies.txt）
+
+当环境无法读取浏览器 Cookie（VPS、CI、openclaw 等）时，使用 cookies 文件：
+
+1. 在已登录的本机浏览器导出 Netscape `cookies.txt`。
+   - 建议用新的无痕/隐身会话导出，降低 cookie 旋转风险。
+2. 上传到 VPS 并限制权限：
+
+```bash
+scp cookies.txt vps:/home/USER/youtube-cookies.txt
+chmod 600 /home/USER/youtube-cookies.txt
+```
+
+3. 让 CLI 读取 cookies 并验证：
+
+```bash
+youtube login --cookies /home/USER/youtube-cookies.txt --check
+youtube status --check
+```
+
+读取类命令仅在需要时加 `--use-auth`；写操作必须有有效登录态。
+如果 VPS 无法进行 GUI 登录，请先在其他机器导出 cookies 再上传。
+
 ## 结构化输出
 
 所有 `--json` 和 `--yaml` 输出都遵循 [SCHEMA.md](./SCHEMA.md) 定义的统一 envelope：
@@ -482,9 +552,15 @@ youtube playlist-create "Agent Review Queue" --dry-run
 - [`CHANGELOG.md`](./CHANGELOG.md)
 - [`releases/`](./releases)
 
+## FAQ
+
+- 无浏览器环境不要用 `--browser`，改用 `--cookies`。
+
 ## 故障排查
 
 - `auth_required` — 先运行 `youtube login --browser chrome --check`，必要时对命令加 `--use-auth`
+- `auth_required`（无头环境）— 在可登录浏览器的机器导出 cookies，并用 `youtube login --cookies <path> --check`
+- `auth_required`（导出）— 无头环境无法自动打开登录页，请在其他机器导出后重试
 - `tls_error` — 检查本地证书链；如果处在受限网络环境，可改用 `--no-check-certificate`
 - `network_error` — 检查网络、DNS、代理或当前环境是否能访问 YouTube
 - `rate_limited` — 当前请求被限流，先降低频率并稍后再试；部分情况下采用 `--use-auth` 
