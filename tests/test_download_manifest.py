@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -269,7 +270,7 @@ class DownloadManifestTests(unittest.TestCase):
         self.assertNotIn("protocol!=m3u8_native", selector)
         self.assertTrue(selector.endswith("/22/18"))
 
-    def test_write_subtitles_exports_bilingual_files(self) -> None:
+    def test_write_subtitles_exports_single_files(self) -> None:
         def fake_download_one(target: str, *, opts, requested_format: str, audio_only: bool):
             return {
                 "target": {"id": "ok", "url": target},
@@ -313,13 +314,70 @@ class DownloadManifestTests(unittest.TestCase):
                     manifest_path=self.manifest_path,
                 )
         exported = tasks[0]["subtitle_files"]
-        self.assertEqual(len(exported), 3)
+        self.assertEqual(len(exported), 2)
         self.assertTrue((self.output_dir / "clip.en.srt").exists())
         self.assertTrue((self.output_dir / "clip.zh-Hans.srt").exists())
-        bilingual = self.output_dir / "clip.en.zh-Hans.bilingual.srt"
-        self.assertTrue(bilingual.exists())
-        self.assertIn("Hello", bilingual.read_text(encoding="utf-8"))
-        self.assertIn("你好", bilingual.read_text(encoding="utf-8"))
+        self.assertIsNone(tasks[0]["subtitle_error"])
+
+    def test_missing_subtitle_translates_with_provider(self) -> None:
+        def fake_download_one(target: str, *, opts, requested_format: str, audio_only: bool):
+            return {
+                "target": {"id": "ok", "url": target},
+                "mode": "video",
+                "status": "completed",
+                "output_path": str(self.output_dir / "clip.mp4"),
+                "requested_format": requested_format,
+                "actual_format": "18",
+                "error": None,
+            }
+
+        subtitles = {
+            "en": {
+                "video_id": "ok",
+                "language": "en",
+                "kind": "manual",
+                "segments": [
+                    {"start_seconds": 0.0, "end_seconds": 1.0, "text": "Hello"},
+                    {"start_seconds": 1.0, "end_seconds": 2.0, "text": "World"},
+                ],
+            },
+        }
+
+        def fake_subtitle_with_fallback(target: str, *, language=None, prefer_auto=False, use_auth=False):
+            if language in (None, "en"):
+                return subtitles["en"]
+            raise YoutubeCliError(
+                "subtitle_unavailable",
+                f"语言 `{language}` 的字幕不存在。",
+                hint="可用语言: en",
+                source="yt_dlp",
+            )
+
+        with patch.object(self.provider, "_download_one", side_effect=fake_download_one):
+            with patch.object(self.provider, "subtitle_with_fallback", side_effect=fake_subtitle_with_fallback):
+                with patch.dict(
+                    os.environ,
+                    {
+                        "YOUTUBE_CLI_TRANSLATION_PROVIDER": "mock",
+                        "YOUTUBE_CLI_TRANSLATION_MOCK_PREFIX": "ZH:",
+                    },
+                    clear=False,
+                ):
+                    tasks = self.provider.download(
+                        ["https://youtu.be/example"],
+                        output_dir=self.output_dir,
+                        format_selector="18",
+                        write_subtitles=True,
+                        subtitle_languages=["en", "zh-CN"],
+                        subtitle_file_format="srt",
+                        use_auth=True,
+                        manifest_path=self.manifest_path,
+                    )
+        exported = tasks[0]["subtitle_files"]
+        self.assertEqual(len(exported), 2)
+        zh_sub = self.output_dir / "clip.zh-CN.srt"
+        self.assertTrue(zh_sub.exists())
+        self.assertIn("ZH:Hello", zh_sub.read_text(encoding="utf-8"))
         self.assertIsNone(tasks[0]["subtitle_error"])
 
     def test_subtitle_export_failure_does_not_fail_video_download(self) -> None:

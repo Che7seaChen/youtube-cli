@@ -11,7 +11,7 @@ A CLI for YouTube — browse videos, channels, playlists, account feeds, and dow
 ## Features
 
 - 🎬 **Video** — inspect video details, comments, related videos, and available download formats
-- 📝 **Subtitles** — fetch manual or auto subtitles, export `srt` / `vtt`, and generate bilingual subtitle files during downloads
+- 📝 **Subtitles** — fetch manual or auto subtitles, export `srt` / `vtt`, and auto-translate missing languages during downloads (per-language files only)
 - 🔍 **Search** — search videos, channels, and playlists by keyword
 - 👤 **Channel** — view channel profile, recent videos, and channel playlists
 - 📂 **Playlist** — inspect playlist metadata, list playlist videos, and download a whole playlist with one command
@@ -81,15 +81,37 @@ youtube --yaml whoami
 
 # Video metadata
 youtube video "https://www.youtube.com/watch?v=VIDEO_ID"
+youtube video "https://www.youtube.com/watch?v=VIDEO_ID" --use-auth
 youtube comments "https://www.youtube.com/watch?v=VIDEO_ID" --limit 20
 youtube comments "https://www.youtube.com/watch?v=VIDEO_ID" --limit 20 --sort new
+youtube comments "https://www.youtube.com/watch?v=VIDEO_ID" --limit 20 --use-auth
 youtube related "https://www.youtube.com/watch?v=VIDEO_ID" --limit 20
 youtube formats "https://www.youtube.com/watch?v=VIDEO_ID"
+youtube formats "https://www.youtube.com/watch?v=VIDEO_ID" --use-auth
 
 # Subtitles
 youtube subtitles "https://www.youtube.com/watch?v=VIDEO_ID" --language en
 youtube subtitles "https://www.youtube.com/watch?v=VIDEO_ID" --language zh-CN --auto
 youtube subtitles "https://www.youtube.com/watch?v=VIDEO_ID" --language en --use-auth
+
+# Subtitle Translation (AI)
+When the requested subtitle language is missing, `youtube-cli` can translate from an available track and keep the original timestamps.
+
+Required environment variables (OpenAI-compatible):
+
+```bash
+export YOUTUBE_CLI_TRANSLATION_PROVIDER=openai
+export YOUTUBE_CLI_OPENAI_API_KEY="..."
+export YOUTUBE_CLI_OPENAI_MODEL="..."
+# Optional
+export YOUTUBE_CLI_OPENAI_BASE_URL="https://api.openai.com/v1"
+export YOUTUBE_CLI_OPENAI_TIMEOUT=30
+export YOUTUBE_CLI_TRANSLATION_BATCH_SIZE=20
+```
+
+Notes:
+- Each language is written as a separate file (no bilingual SRT merge).
+- Subtitles are sent to the translation service. Ensure you have permission before enabling it.
 
 # Search & browse
 youtube search "openai" --type video --limit 5
@@ -303,7 +325,7 @@ export YOUTUBE_CLI_NO_CHECK_CERTIFICATE=1
 ## 功能特性
 
 - 🎬 **视频** — 查看视频详情、评论、相关推荐，以及当前可下载的格式列表
-- 📝 **字幕** — 获取人工字幕或自动字幕，支持导出 `srt` / `vtt`，并可在下载时生成双语字幕文件
+- 📝 **字幕** — 获取人工字幕或自动字幕，支持导出 `srt` / `vtt`，缺失语言可在下载时自动翻译（仅生成单语文件）
 - 🔍 **搜索** — 按关键词搜索视频、频道和 playlist
 - 👤 **频道** — 查看频道资料、最新视频和频道下的 playlist
 - 📂 **Playlist** — 查看 playlist 信息、列出 playlist 视频，并用单个命令下载整个 playlist
@@ -373,15 +395,37 @@ youtube --yaml whoami
 
 # 视频信息
 youtube video "https://www.youtube.com/watch?v=VIDEO_ID"
+youtube video "https://www.youtube.com/watch?v=VIDEO_ID" --use-auth
 youtube comments "https://www.youtube.com/watch?v=VIDEO_ID" --limit 20
 youtube comments "https://www.youtube.com/watch?v=VIDEO_ID" --limit 20 --sort new
+youtube comments "https://www.youtube.com/watch?v=VIDEO_ID" --limit 20 --use-auth
 youtube related "https://www.youtube.com/watch?v=VIDEO_ID" --limit 20
 youtube formats "https://www.youtube.com/watch?v=VIDEO_ID"
+youtube formats "https://www.youtube.com/watch?v=VIDEO_ID" --use-auth
 
 # 字幕
 youtube subtitles "https://www.youtube.com/watch?v=VIDEO_ID" --language en
 youtube subtitles "https://www.youtube.com/watch?v=VIDEO_ID" --language zh-CN --auto
 youtube subtitles "https://www.youtube.com/watch?v=VIDEO_ID" --language en --use-auth
+
+# 字幕翻译（AI）
+当所需字幕语言缺失时，`youtube-cli` 会基于可用字幕进行翻译，并保持原时间轴对齐。
+
+必需环境变量（兼容 OpenAI API）：
+
+```bash
+export YOUTUBE_CLI_TRANSLATION_PROVIDER=openai
+export YOUTUBE_CLI_OPENAI_API_KEY="..."
+export YOUTUBE_CLI_OPENAI_MODEL="..."
+# 可选
+export YOUTUBE_CLI_OPENAI_BASE_URL="https://api.openai.com/v1"
+export YOUTUBE_CLI_OPENAI_TIMEOUT=30
+export YOUTUBE_CLI_TRANSLATION_BATCH_SIZE=20
+```
+
+说明：
+- 每种语言单独保存字幕文件（不再合并双语 SRT）。
+- 字幕文本会发送到翻译服务，请确认合规与权限。
 
 # 搜索与浏览
 youtube search "openai" --type video --limit 5
@@ -557,6 +601,10 @@ youtube playlist-create "Agent Review Queue" --dry-run
 - 无浏览器环境不要用 `--browser`，改用 `--cookies`。
 
 ## 故障排查
+
+- `translation_unavailable` — 未配置翻译服务；设置 `YOUTUBE_CLI_TRANSLATION_PROVIDER` 与对应 API Key/Model
+- `translation_failed` — 翻译服务请求失败；检查 Key、模型名称、Base URL 或限流
+- `unsupported_operation`（格式不存在）— 若伴随 YouTube JS challenge 提示，配置 `YOUTUBE_CLI_JS_RUNTIMES=node` 与 `YOUTUBE_CLI_REMOTE_COMPONENTS=ejs:github`
 
 - `auth_required` — 先运行 `youtube login --browser chrome --check`，必要时对命令加 `--use-auth`
 - `auth_required`（无头环境）— 在可登录浏览器的机器导出 cookies，并用 `youtube login --cookies <path> --check`

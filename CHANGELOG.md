@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.3] - 2026-03-14
+
+### Added
+
+- Added AI translation fallback when requested subtitle languages are missing; subtitles remain aligned to the original timeline.
+- Added `--use-auth` for `video`, `comments`, and `formats` to pass browser auth when bot checks are triggered.
+- Added translation configuration via `YOUTUBE_CLI_TRANSLATION_PROVIDER` and related OpenAI-compatible environment variables.
+- Added optional JS challenge configuration via `YOUTUBE_CLI_JS_RUNTIMES` and `YOUTUBE_CLI_REMOTE_COMPONENTS`.
+
+### Changed
+
+- Subtitles are now exported as per-language files only; bilingual SRT merge has been removed.
+
 ## [0.1.2] - 2026-03-14
 
 ### Added

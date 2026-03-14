@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import os
 import io
 import json
 import re
@@ -27,7 +28,8 @@ from ..normalize import (
     normalize_playlist,
     normalize_video,
 )
-from ..subtitles import merge_bilingual_segments, parse_json3, parse_vtt, write_subtitle_file
+from ..subtitles import parse_json3, parse_vtt, write_subtitle_file
+from ..translation import build_translator, translate_segments
 from ..reverse import YoutubeWriteClient
 
 FEED_URLS = {
@@ -116,6 +118,16 @@ class YtDlpProvider:
                     opts["cookiesfrombrowser"] = cookies_from_browser
         if self.no_check_certificate:
             opts["nocheckcertificate"] = True
+        js_runtimes = os.getenv("YOUTUBE_CLI_JS_RUNTIMES")
+        if js_runtimes:
+            runtimes = [item.strip().lower() for item in js_runtimes.split(",") if item.strip()]
+            if runtimes:
+                opts["js_runtimes"] = {runtime: {} for runtime in runtimes}
+        remote_components = os.getenv("YOUTUBE_CLI_REMOTE_COMPONENTS")
+        if remote_components:
+            components = [item.strip() for item in remote_components.split(",") if item.strip()]
+            if components:
+                opts["remote_components"] = components
         return opts
 
     def _extract(
@@ -253,11 +265,11 @@ class YtDlpProvider:
         )
         return status
 
-    def video(self, target: str) -> dict[str, Any]:
-        return normalize_video(self._extract(target, use_auth=False))
+    def video(self, target: str, *, use_auth: bool = False) -> dict[str, Any]:
+        return normalize_video(self._extract(target, use_auth=use_auth))
 
-    def formats(self, target: str) -> dict[str, Any]:
-        return normalize_formats(self._extract(target, use_auth=False))
+    def formats(self, target: str, *, use_auth: bool = False) -> dict[str, Any]:
+        return normalize_formats(self._extract(target, use_auth=use_auth))
 
     def subtitles(
         self,
@@ -476,10 +488,17 @@ class YtDlpProvider:
             item["source_feed"] = name
         return items
 
-    def comments(self, target: str, *, limit: int = 20, sort: str = "top") -> list[dict[str, Any]]:
+    def comments(
+        self,
+        target: str,
+        *,
+        limit: int = 20,
+        sort: str = "top",
+        use_auth: bool = False,
+    ) -> list[dict[str, Any]]:
         info = self._extract(
             target,
-            use_auth=False,
+            use_auth=use_auth,
             getcomments=True,
             extractor_args={
                 "youtube": {
@@ -913,68 +932,84 @@ class YtDlpProvider:
             )
         base_output = output_path.with_suffix("")
         exports: list[dict[str, Any]] = []
-        primary = self.subtitle_with_fallback(
-            target,
-            language=requested_languages[0],
-            prefer_auto=prefer_auto_subtitles,
-            use_auth=use_auth,
-        )
-        if len(requested_languages) == 1:
-            subtitle_path = base_output.with_suffix(f".{primary['language']}.{file_format}")
-            write_subtitle_file(subtitle_path, primary["segments"], fmt=file_format)
+        resolved: dict[str, dict[str, Any]] = {}
+        missing: list[str] = []
+        last_error: YoutubeCliError | None = None
+
+        for language in requested_languages:
+            try:
+                resolved[language] = self.subtitle_with_fallback(
+                    target,
+                    language=language,
+                    prefer_auto=prefer_auto_subtitles,
+                    use_auth=use_auth,
+                )
+            except YoutubeCliError as exc:
+                if exc.code != "subtitle_unavailable":
+                    raise
+                missing.append(language)
+                last_error = exc
+
+        if missing:
+            source_track = None
+            for language in requested_languages:
+                if language in resolved:
+                    source_track = resolved[language]
+                    break
+            if source_track is None:
+                try:
+                    source_track = self.subtitle_with_fallback(
+                        target,
+                        language=None,
+                        prefer_auto=prefer_auto_subtitles,
+                        use_auth=use_auth,
+                    )
+                except YoutubeCliError as exc:
+                    if exc.code == "subtitle_unavailable" and last_error is not None:
+                        raise last_error
+                    raise
+            translator = build_translator()
+            batch_size_raw = os.getenv("YOUTUBE_CLI_TRANSLATION_BATCH_SIZE", "20")
+            try:
+                batch_size = int(batch_size_raw)
+            except ValueError:
+                batch_size = 20
+            for language in missing:
+                translated_segments = translate_segments(
+                    translator,
+                    source_track["segments"],
+                    source_lang=source_track["language"],
+                    target_lang=language,
+                    batch_size=batch_size,
+                )
+                resolved[language] = {
+                    "video_id": source_track.get("video_id"),
+                    "language": language,
+                    "kind": "translated",
+                    "format": file_format,
+                    "segments": translated_segments,
+                    "source_language": source_track.get("language"),
+                    "provider": getattr(translator, "name", "unknown"),
+                }
+
+        for language in requested_languages:
+            track = resolved.get(language)
+            if not track:
+                continue
+            subtitle_path = base_output.with_suffix(f".{track['language']}.{file_format}")
+            write_subtitle_file(subtitle_path, track["segments"], fmt=file_format)
             exports.append(
                 {
                     "path": str(subtitle_path),
-                    "language": primary["language"],
-                    "kind": primary["kind"],
+                    "language": track["language"],
+                    "kind": track.get("kind"),
                     "mode": "single",
                     "format": file_format,
+                    "translated": track.get("kind") == "translated",
+                    "source_language": track.get("source_language"),
+                    "provider": track.get("provider"),
                 }
             )
-            return exports
-        secondary = self.subtitle_with_fallback(
-            target,
-            language=requested_languages[1],
-            prefer_auto=prefer_auto_subtitles,
-            use_auth=use_auth,
-        )
-        primary_path = base_output.with_suffix(f".{primary['language']}.{file_format}")
-        secondary_path = base_output.with_suffix(f".{secondary['language']}.{file_format}")
-        bilingual_path = base_output.with_suffix(
-            f".{primary['language']}.{secondary['language']}.bilingual.{file_format}"
-        )
-        write_subtitle_file(primary_path, primary["segments"], fmt=file_format)
-        write_subtitle_file(secondary_path, secondary["segments"], fmt=file_format)
-        write_subtitle_file(
-            bilingual_path,
-            merge_bilingual_segments(primary["segments"], secondary["segments"]),
-            fmt=file_format,
-        )
-        exports.extend(
-            [
-                {
-                    "path": str(primary_path),
-                    "language": primary["language"],
-                    "kind": primary["kind"],
-                    "mode": "single",
-                    "format": file_format,
-                },
-                {
-                    "path": str(secondary_path),
-                    "language": secondary["language"],
-                    "kind": secondary["kind"],
-                    "mode": "single",
-                    "format": file_format,
-                },
-                {
-                    "path": str(bilingual_path),
-                    "language": f"{primary['language']}+{secondary['language']}",
-                    "kind": f"{primary['kind']}+{secondary['kind']}",
-                    "mode": "bilingual",
-                    "format": file_format,
-                },
-            ]
-        )
         return exports
 
     def _parse_subtitle_content(self, content: str, *, ext: str | None) -> list[dict[str, Any]]:

@@ -319,9 +319,14 @@ def whoami(ctx: AppContext) -> None:
 
 @main.command()
 @click.argument("target")
+@click.option(
+    "--use-auth",
+    is_flag=True,
+    help="读取视频详情时显式携带浏览器登录态。仅在匿名链路触发限流或受限时使用。",
+)
 @pass_context
-def video(ctx: AppContext, target: str) -> None:
-    _run(ctx, "video", lambda: ctx.provider.video(target))
+def video(ctx: AppContext, target: str, use_auth: bool) -> None:
+    _run(ctx, "video", lambda: ctx.provider.video(target, use_auth=use_auth))
 
 
 @main.command()
@@ -342,16 +347,30 @@ def related(ctx: AppContext, target: str, limit: int) -> None:
     type=click.Choice(["top", "new"]),
     help="评论排序方式。",
 )
+@click.option(
+    "--use-auth",
+    is_flag=True,
+    help="读取评论时显式携带浏览器登录态。仅在匿名链路触发限流或受限时使用。",
+)
 @pass_context
-def comments(ctx: AppContext, target: str, limit: int, sort: str) -> None:
-    _run(ctx, "comments", lambda: ctx.provider.comments(target, limit=limit, sort=sort))
+def comments(ctx: AppContext, target: str, limit: int, sort: str, use_auth: bool) -> None:
+    _run(
+        ctx,
+        "comments",
+        lambda: ctx.provider.comments(target, limit=limit, sort=sort, use_auth=use_auth),
+    )
 
 
 @main.command()
 @click.argument("target")
+@click.option(
+    "--use-auth",
+    is_flag=True,
+    help="读取格式信息时显式携带浏览器登录态。仅在匿名链路触发限流或受限时使用。",
+)
 @pass_context
-def formats(ctx: AppContext, target: str) -> None:
-    _run(ctx, "formats", lambda: ctx.provider.formats(target))
+def formats(ctx: AppContext, target: str, use_auth: bool) -> None:
+    _run(ctx, "formats", lambda: ctx.provider.formats(target, use_auth=use_auth))
 
 
 @main.command()

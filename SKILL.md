@@ -1,6 +1,8 @@
 ---
 name: youtube-cli
-description: Use this skill when the user wants to search YouTube, inspect videos, comments, related videos, subtitles, channels, playlists, authenticated feeds, batch downloads, or run explicit account actions such as watch-later and playlist management through this repository's CLI.
+description: Use this skill for account management, deep metadata, and comments.
+  - 核心场景："看评论"、"管理订阅"、"稍后观看"、"账户状态"、"youtube status"、"youtube login"。
+  - 注意：侧重于账户和社交数据。
 ---
 
 # youtube-cli Skill
@@ -13,7 +15,7 @@ Use this skill when the user asks to:
 
 - search YouTube videos, channels, or playlists
 - inspect video metadata, comments, related videos, or formats
-- fetch subtitles or generate bilingual subtitle files
+- fetch subtitles or auto-translate missing subtitle languages
 - browse channels, playlists, subscriptions, watch later, history, recommendations, or notifications
 - download videos, audio, or whole playlists
 - save to watch later or manage playlists
