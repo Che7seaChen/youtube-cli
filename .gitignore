@@ -9,3 +9,5 @@ build/
 .venv/
 .venv-delivery/
 .venv-delivery-ssp/
+# Local handoff notes
+HANDOFF-Codex-*.md
