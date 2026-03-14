@@ -68,7 +68,7 @@ pipx upgrade youtube-cli
 
 > Tip: Keep `yt-dlp` current. YouTube extraction behavior changes frequently, and outdated versions are more likely to fail on formats, subtitles, or authenticated flows.
 
-## Usage
+## Quick Start
 
 ```bash
 # Login
@@ -78,16 +78,74 @@ youtube login --browser chrome --check
 youtube video "https://www.youtube.com/watch?v=VIDEO_ID"
 
 # Download with subtitles (auto-translate missing languages if configured)
-youtube download "https://www.youtube.com/watch?v=VIDEO_ID" \
-  --write-subs --sub-lang en --sub-lang zh-CN
+youtube download "https://www.youtube.com/watch?v=VIDEO_ID"   --write-subs --sub-lang en --sub-lang zh-CN
 
 # JSON output
 youtube --json video "https://www.youtube.com/watch?v=VIDEO_ID"
 ```
 
+## Command Reference
+
+**Discovery**
+
+| Command | Purpose | Example |
+| --- | --- | --- |
+| `search` | Search videos, channels, or playlists | `youtube search "openai" --type video --limit 5` |
+| `channel` | Channel overview | `youtube channel @OpenAI --limit 5` |
+| `channel-videos` | Recent channel videos | `youtube channel-videos @OpenAI --limit 10` |
+| `channel-playlists` | Channel playlists | `youtube channel-playlists @OpenAI --limit 10` |
+| `playlist` | Playlist metadata | `youtube playlist PLAYLIST_ID --limit 10` |
+| `playlist-videos` | Playlist items | `youtube playlist-videos PLAYLIST_ID --limit 10` |
+
+**Video & Subtitles**
+
+| Command | Purpose | Example |
+| --- | --- | --- |
+| `video` | Video details | `youtube video "https://www.youtube.com/watch?v=VIDEO_ID"` |
+| `comments` | Comments | `youtube comments "https://www.youtube.com/watch?v=VIDEO_ID" --limit 20 --sort new` |
+| `related` | Related videos | `youtube related "https://www.youtube.com/watch?v=VIDEO_ID" --limit 20` |
+| `formats` | Available formats | `youtube formats "https://www.youtube.com/watch?v=VIDEO_ID"` |
+| `subtitles` | Fetch subtitles | `youtube subtitles "https://www.youtube.com/watch?v=VIDEO_ID" --language en` |
+
+**Downloads**
+
+| Command | Purpose | Example |
+| --- | --- | --- |
+| `download` | Download video | `youtube download "https://www.youtube.com/watch?v=VIDEO_ID" --quality 1080p` |
+| `download` (subs) | Download + subtitles | `youtube download "https://www.youtube.com/watch?v=VIDEO_ID" --write-subs --sub-lang en --sub-lang zh-CN` |
+| `audio` | Download audio | `youtube audio "https://www.youtube.com/watch?v=VIDEO_ID"` |
+| `playlist-download` | Download playlist | `youtube playlist-download PLAYLIST_ID --quality 360p` |
+
+**Account & Feeds**
+
+| Command | Purpose | Example |
+| --- | --- | --- |
+| `login` | Configure auth | `youtube login --browser chrome --check` |
+| `status` | Auth status | `youtube status --check` |
+| `whoami` | Auth capabilities | `youtube whoami` |
+| `subscriptions` | Subscriptions feed | `youtube subscriptions --limit 20` |
+| `favorites` | Favorites feed | `youtube favorites --limit 20` |
+| `watch-later` | Watch later feed | `youtube watch-later --limit 20` |
+| `history` | History feed | `youtube history --limit 20` |
+| `recommendations` | Recommendations | `youtube recommendations --limit 20` |
+| `notifications` | Notifications | `youtube notifications --limit 20` |
+
+**Write Actions**
+
+| Command | Purpose | Example |
+| --- | --- | --- |
+| `save-to-watch-later` | Save a video | `youtube save-to-watch-later "https://www.youtube.com/watch?v=VIDEO_ID" --yes` |
+| `playlist-add` | Add to playlist | `youtube playlist-add "https://www.youtube.com/watch?v=VIDEO_ID" PLAYLIST_ID --yes` |
+| `playlist-create` | Create playlist | `youtube playlist-create "My Playlist" --privacy private --yes` |
+| `playlist-delete` | Delete playlist | `youtube playlist-delete PLAYLIST_ID --yes` |
+
+Notes:
+- For `video`, `comments`, and `formats`, use `--use-auth` when bot checks appear.
+- All commands support `--json` or `--yaml` structured output.
+
 ## Subtitle Translation (AI)
 
-When the requested subtitle language is missing, youtube-cli can translate from an available track and keep timestamps aligned.
+When the requested subtitle language is missing, youtube-cli can translate from an available track and keep timestamps aligned. If no subtitles exist at all, subtitle export is skipped (video download still succeeds).
 
 Required environment variables:
 
@@ -116,6 +174,17 @@ youtube status --check
 # Headless/VPS
 youtube login --cookies /path/to/cookies.txt --check
 ```
+
+## Structured Output
+
+All `--json` / `--yaml` output follows the envelope defined in [SCHEMA.md](./SCHEMA.md).
+
+## Troubleshooting
+
+- `auth_required` — run `youtube login --browser chrome --check`, then retry with `--use-auth`
+- `tls_error` — use `--no-check-certificate` in restricted networks
+- `translation_unavailable` — configure translation env vars
+- `unsupported_operation` with JS challenge — set `YOUTUBE_CLI_JS_RUNTIMES=node` and `YOUTUBE_CLI_REMOTE_COMPONENTS=ejs:github`
 
 ## 功能特性
 
@@ -177,7 +246,7 @@ pipx upgrade youtube-cli
 
 > 提示：YouTube 的提取和下载链路变化较快，`yt-dlp` 版本过旧时更容易在格式、字幕或认证链路上失败。
 
-## 用法
+## 快速开始
 
 ```bash
 # 登录
@@ -187,16 +256,74 @@ youtube login --browser chrome --check
 youtube video "https://www.youtube.com/watch?v=VIDEO_ID"
 
 # 下载并输出字幕（缺失语言会按配置翻译）
-youtube download "https://www.youtube.com/watch?v=VIDEO_ID" \
-  --write-subs --sub-lang en --sub-lang zh-CN
+youtube download "https://www.youtube.com/watch?v=VIDEO_ID"   --write-subs --sub-lang en --sub-lang zh-CN
 
 # JSON 输出
 youtube --json video "https://www.youtube.com/watch?v=VIDEO_ID"
 ```
 
+## 命令参考
+
+**检索与列表**
+
+| 命令 | 功能 | 示例 |
+| --- | --- | --- |
+| `search` | 搜索视频/频道/playlist | `youtube search "openai" --type video --limit 5` |
+| `channel` | 频道概览 | `youtube channel @OpenAI --limit 5` |
+| `channel-videos` | 频道视频列表 | `youtube channel-videos @OpenAI --limit 10` |
+| `channel-playlists` | 频道 playlist | `youtube channel-playlists @OpenAI --limit 10` |
+| `playlist` | playlist 详情 | `youtube playlist PLAYLIST_ID --limit 10` |
+| `playlist-videos` | playlist 视频列表 | `youtube playlist-videos PLAYLIST_ID --limit 10` |
+
+**视频与字幕**
+
+| 命令 | 功能 | 示例 |
+| --- | --- | --- |
+| `video` | 视频详情 | `youtube video "https://www.youtube.com/watch?v=VIDEO_ID"` |
+| `comments` | 评论 | `youtube comments "https://www.youtube.com/watch?v=VIDEO_ID" --limit 20 --sort new` |
+| `related` | 相关推荐 | `youtube related "https://www.youtube.com/watch?v=VIDEO_ID" --limit 20` |
+| `formats` | 可用格式 | `youtube formats "https://www.youtube.com/watch?v=VIDEO_ID"` |
+| `subtitles` | 获取字幕 | `youtube subtitles "https://www.youtube.com/watch?v=VIDEO_ID" --language en` |
+
+**下载**
+
+| 命令 | 功能 | 示例 |
+| --- | --- | --- |
+| `download` | 下载视频 | `youtube download "https://www.youtube.com/watch?v=VIDEO_ID" --quality 1080p` |
+| `download`（字幕） | 下载并导出字幕 | `youtube download "https://www.youtube.com/watch?v=VIDEO_ID" --write-subs --sub-lang en --sub-lang zh-CN` |
+| `audio` | 下载音频 | `youtube audio "https://www.youtube.com/watch?v=VIDEO_ID"` |
+| `playlist-download` | 下载 playlist | `youtube playlist-download PLAYLIST_ID --quality 360p` |
+
+**登录与登录态列表**
+
+| 命令 | 功能 | 示例 |
+| --- | --- | --- |
+| `login` | 配置认证 | `youtube login --browser chrome --check` |
+| `status` | 认证状态 | `youtube status --check` |
+| `whoami` | 能力检测 | `youtube whoami` |
+| `subscriptions` | 订阅列表 | `youtube subscriptions --limit 20` |
+| `favorites` | 收藏列表 | `youtube favorites --limit 20` |
+| `watch-later` | 稍后再看列表 | `youtube watch-later --limit 20` |
+| `history` | 历史记录 | `youtube history --limit 20` |
+| `recommendations` | 推荐列表 | `youtube recommendations --limit 20` |
+| `notifications` | 通知 | `youtube notifications --limit 20` |
+
+**写操作**
+
+| 命令 | 功能 | 示例 |
+| --- | --- | --- |
+| `save-to-watch-later` | 加入稍后再看 | `youtube save-to-watch-later "https://www.youtube.com/watch?v=VIDEO_ID" --yes` |
+| `playlist-add` | 加入 playlist | `youtube playlist-add "https://www.youtube.com/watch?v=VIDEO_ID" PLAYLIST_ID --yes` |
+| `playlist-create` | 创建 playlist | `youtube playlist-create "My Playlist" --privacy private --yes` |
+| `playlist-delete` | 删除 playlist | `youtube playlist-delete PLAYLIST_ID --yes` |
+
+说明：
+- `video` / `comments` / `formats` 遇到 bot check 时可加 `--use-auth`
+- 全部命令支持 `--json` / `--yaml` 结构化输出
+
 ## 字幕翻译（AI）
 
-当所需字幕语言缺失时，youtube-cli 会基于可用字幕进行翻译并保持时间轴对齐。
+当所需字幕语言缺失时，youtube-cli 会基于可用字幕进行翻译并保持时间轴对齐；如果完全没有字幕，则跳过字幕导出（视频仍会下载）。
 
 必需环境变量：
 
@@ -229,10 +356,6 @@ youtube login --cookies /path/to/cookies.txt --check
 ## 结构化输出
 
 所有 `--json` / `--yaml` 输出遵循 [SCHEMA.md](./SCHEMA.md) 的统一 envelope。
-
-## FAQ
-
-- 无浏览器环境不要用 `--browser`，改用 `--cookies`。
 
 ## 故障排查
 
