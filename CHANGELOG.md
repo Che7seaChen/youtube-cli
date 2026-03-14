@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.1] - 2026-03-14
+
+### Fixed
+
+- Added auth-to-anon fallback for read operations when authenticated extraction fails (e.g., unsupported format), preventing `--use-auth` from breaking reads.
+
 All notable changes to this project will be documented in this file.
 
 ## [0.2.0] - 2026-03-14
