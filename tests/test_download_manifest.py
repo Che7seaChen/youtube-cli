@@ -380,6 +380,42 @@ class DownloadManifestTests(unittest.TestCase):
         self.assertIn("ZH:Hello", zh_sub.read_text(encoding="utf-8"))
         self.assertIsNone(tasks[0]["subtitle_error"])
 
+    def test_missing_subtitles_is_ignored(self) -> None:
+        def fake_download_one(target: str, *, opts, requested_format: str, audio_only: bool):
+            return {
+                "target": {"id": "ok", "url": target},
+                "mode": "video",
+                "status": "completed",
+                "output_path": str(self.output_dir / "clip.mp4"),
+                "requested_format": requested_format,
+                "actual_format": "18",
+                "error": None,
+            }
+
+        def fake_subtitle_with_fallback(*args, **kwargs):
+            raise YoutubeCliError(
+                "subtitle_unavailable",
+                "当前视频没有可用字幕。",
+                source="yt_dlp",
+            )
+
+        with patch.object(self.provider, "_download_one", side_effect=fake_download_one):
+            with patch.object(self.provider, "subtitle_with_fallback", side_effect=fake_subtitle_with_fallback):
+                tasks = self.provider.download(
+                    ["https://youtu.be/example"],
+                    output_dir=self.output_dir,
+                    format_selector="18",
+                    write_subtitles=True,
+                    subtitle_languages=["en", "zh-CN"],
+                    subtitle_file_format="srt",
+                    use_auth=True,
+                    manifest_path=self.manifest_path,
+                )
+
+        self.assertEqual(tasks[0]["status"], "completed")
+        self.assertEqual(tasks[0]["subtitle_files"], [])
+        self.assertIsNone(tasks[0]["subtitle_error"])
+
     def test_subtitle_export_failure_does_not_fail_video_download(self) -> None:
         def fake_download_one(target: str, *, opts, requested_format: str, audio_only: bool):
             return {

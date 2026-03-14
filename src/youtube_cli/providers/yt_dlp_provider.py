@@ -957,13 +957,17 @@ class YtDlpProvider:
                     source_track = resolved[language]
                     break
             if source_track is None:
-                if last_error is not None:
-                    raise last_error
-                raise YoutubeCliError(
-                    "subtitle_unavailable",
-                    "当前视频没有可用字幕。",
-                    source="yt_dlp",
-                )
+                try:
+                    source_track = self.subtitle_with_fallback(
+                        target,
+                        language=None,
+                        prefer_auto=prefer_auto_subtitles,
+                        use_auth=use_auth,
+                    )
+                except YoutubeCliError as exc:
+                    if exc.code == "subtitle_unavailable":
+                        return []
+                    raise
             translator = build_translator()
             batch_size_raw = os.getenv("YOUTUBE_CLI_TRANSLATION_BATCH_SIZE", "20")
             try:
