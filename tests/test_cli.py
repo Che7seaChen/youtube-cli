@@ -13,9 +13,12 @@ from youtube_cli.cli import main
 
 
 class FakeProvider:
-    def __init__(self, auth=None, *, no_check_certificate=False) -> None:
+    def __init__(self, auth=None, *, no_check_certificate=False, mode=None, rate_limit=None, retry=None) -> None:
         self.auth = auth
         self.no_check_certificate = no_check_certificate
+        self.mode = mode
+        self.rate_limit = rate_limit
+        self.retry = retry
 
     def status(self):
         return {"provider": "yt_dlp", "auth_configured": self.auth is not None}
