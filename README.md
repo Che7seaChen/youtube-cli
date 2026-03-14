@@ -95,23 +95,19 @@ youtube subtitles "https://www.youtube.com/watch?v=VIDEO_ID" --language zh-CN --
 youtube subtitles "https://www.youtube.com/watch?v=VIDEO_ID" --language en --use-auth
 
 # Subtitle Translation (AI)
-When the requested subtitle language is missing, `youtube-cli` can translate from an available track and keep the original timestamps.
+When the requested subtitle language is missing, youtube-cli can translate from an available track and keep timestamps aligned.
 
-Required environment variables (OpenAI-compatible):
+Required environment variables:
 
 ```bash
 export YOUTUBE_CLI_TRANSLATION_PROVIDER=openai
 export YOUTUBE_CLI_OPENAI_API_KEY="..."
 export YOUTUBE_CLI_OPENAI_MODEL="..."
-# Optional
-export YOUTUBE_CLI_OPENAI_BASE_URL="https://api.openai.com/v1"
-export YOUTUBE_CLI_OPENAI_TIMEOUT=30
-export YOUTUBE_CLI_TRANSLATION_BATCH_SIZE=20
 ```
 
 Notes:
-- Each language is written as a separate file (no bilingual SRT merge).
-- Subtitles are sent to the translation service. Ensure you have permission before enabling it.
+- Per-language subtitle files only (no bilingual merge).
+- Subtitle text is sent to the translation service.
 
 # Search & browse
 youtube search "openai" --type video --limit 5
@@ -409,23 +405,19 @@ youtube subtitles "https://www.youtube.com/watch?v=VIDEO_ID" --language zh-CN --
 youtube subtitles "https://www.youtube.com/watch?v=VIDEO_ID" --language en --use-auth
 
 # 字幕翻译（AI）
-当所需字幕语言缺失时，`youtube-cli` 会基于可用字幕进行翻译，并保持原时间轴对齐。
+当所需字幕语言缺失时，youtube-cli 会基于可用字幕进行翻译并保持时间轴对齐。
 
-必需环境变量（兼容 OpenAI API）：
+必需环境变量：
 
 ```bash
 export YOUTUBE_CLI_TRANSLATION_PROVIDER=openai
 export YOUTUBE_CLI_OPENAI_API_KEY="..."
 export YOUTUBE_CLI_OPENAI_MODEL="..."
-# 可选
-export YOUTUBE_CLI_OPENAI_BASE_URL="https://api.openai.com/v1"
-export YOUTUBE_CLI_OPENAI_TIMEOUT=30
-export YOUTUBE_CLI_TRANSLATION_BATCH_SIZE=20
 ```
 
 说明：
-- 每种语言单独保存字幕文件（不再合并双语 SRT）。
-- 字幕文本会发送到翻译服务，请确认合规与权限。
+- 每种语言单独保存字幕文件（不合并双语）。
+- 字幕文本会发送到翻译服务。
 
 # 搜索与浏览
 youtube search "openai" --type video --limit 5
@@ -565,74 +557,16 @@ error: null
 
 写操作的结果也使用同一套 envelope，脚本可以统一判断 `ok`、`data` 和 `error`。
 
-## 作为 AI Agent 工具使用
-
-`youtube-cli` 很适合给 AI agent 直接调用，原因是命令面比较明确，输出也稳定：
-
-- 需要机器可读结果时，直接用 `--yaml` 或 `--json`
-- 需要减少上下文体积时，用 `--limit` 控制返回规模
-- 需要下载整个 playlist 时，优先用 `playlist-download`，不要自己先拼 `playlist-videos`
-- 需要做写操作前预演时，用 `--dry-run`
-
-给 agent 的输出建议：
-
-- 如果下游不强制要求 JSON，优先用 `--yaml`
-- 如果要对接严格 JSON 解析器，再用 `--json`
-- 读取类命令尽量配 `--limit`
-- 写操作建议先 `--dry-run`，确认后再 `--yes`
-- 仓库里已经附带可直接复用的 [`SKILL.md`](./SKILL.md)
-
-推荐模式：
-
-```bash
-youtube --yaml search "openai" --type channel --limit 3
-youtube --yaml playlist-videos PLAYLIST_ID --limit 5
-youtube --json download --batch-file targets.txt --quality 1080p
-youtube playlist-create "Agent Review Queue" --dry-run
-```
-
-版本说明与发布正文可直接查看：
-
-- [`CHANGELOG.md`](./CHANGELOG.md)
-- [`releases/`](./releases)
-
 ## FAQ
 
 - 无浏览器环境不要用 `--browser`，改用 `--cookies`。
 
 ## 故障排查
 
-- `translation_unavailable` — 未配置翻译服务；设置 `YOUTUBE_CLI_TRANSLATION_PROVIDER` 与对应 API Key/Model
-- `translation_failed` — 翻译服务请求失败；检查 Key、模型名称、Base URL 或限流
-- `unsupported_operation`（格式不存在）— 若伴随 YouTube JS challenge 提示，配置 `YOUTUBE_CLI_JS_RUNTIMES=node` 与 `YOUTUBE_CLI_REMOTE_COMPONENTS=ejs:github`
-
 - `auth_required` — 先运行 `youtube login --browser chrome --check`，必要时对命令加 `--use-auth`
-- `auth_required`（无头环境）— 在可登录浏览器的机器导出 cookies，并用 `youtube login --cookies <path> --check`
-- `auth_required`（导出）— 无头环境无法自动打开登录页，请在其他机器导出后重试
-- `tls_error` — 检查本地证书链；如果处在受限网络环境，可改用 `--no-check-certificate`
-- `network_error` — 检查网络、DNS、代理或当前环境是否能访问 YouTube
-- `rate_limited` — 当前请求被限流，先降低频率并稍后再试；部分情况下采用 `--use-auth` 
-- `download_failed` — 先用 `youtube formats <url>` 看可用格式，再尝试 `--use-auth` 或 `aria2c`
-- `not_found` — 检查视频、playlist 或频道的 URL / ID 是否正确
-
-对下载链路，补充几点：
-
-- 字幕会以独立文件保存
-- 字幕导出失败不会把主视频 / 音频下载标成失败
-- `--resume-failed` 会复用本地 manifest，并自动跳过已经完成的目标
-
-如果当前机器存在 TLS 证书链问题，可临时绕过：
-
-```bash
-youtube --no-check-certificate status --check
-youtube --no-check-certificate playlist-create "Test Playlist" --privacy private --yes
-```
-
-也可给当前 shell 会话设置一次环境变量：
-
-```bash
-export YOUTUBE_CLI_NO_CHECK_CERTIFICATE=1
-```
+- `tls_error` — 如处于受限网络环境，可改用 `--no-check-certificate`
+- `translation_unavailable` — 未配置翻译服务；设置翻译相关环境变量
+- `unsupported_operation`（格式不存在）— 如伴随 JS challenge 提示，配置 `YOUTUBE_CLI_JS_RUNTIMES=node` 与 `YOUTUBE_CLI_REMOTE_COMPONENTS=ejs:github`
 
 ## 致谢
 
