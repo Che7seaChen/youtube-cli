@@ -145,7 +145,7 @@ Notes:
 
 ## Subtitle Translation (AI)
 
-When the requested subtitle language is missing, youtube-cli can translate from an available track and keep timestamps aligned. If no subtitles exist at all, subtitle export is skipped (video download still succeeds).
+When `--write-subs` is used and the requested subtitle language is missing, youtube-cli can translate from an available track and keep timestamps aligned. If no subtitles exist at all, subtitle export is skipped (video download still succeeds).
 
 Required environment variables:
 
@@ -156,6 +156,7 @@ export YOUTUBE_CLI_OPENAI_MODEL="..."
 ```
 
 Notes:
+- Translation runs only in download flows with `--write-subs` (the `subtitles` command does not translate).
 - Per-language subtitle files only (no bilingual merge).
 - Subtitle text is sent to the translation service.
 
@@ -323,7 +324,7 @@ youtube --json video "https://www.youtube.com/watch?v=VIDEO_ID"
 
 ## 字幕翻译（AI）
 
-当所需字幕语言缺失时，youtube-cli 会基于可用字幕进行翻译并保持时间轴对齐；如果完全没有字幕，则跳过字幕导出（视频仍会下载）。
+当使用 `--write-subs` 且所需字幕语言缺失时，youtube-cli 会基于可用字幕进行翻译并保持时间轴对齐；如果完全没有字幕，则跳过字幕导出（视频仍会下载）。
 
 必需环境变量：
 
@@ -334,6 +335,7 @@ export YOUTUBE_CLI_OPENAI_MODEL="..."
 ```
 
 说明：
+- 仅在下载链路并使用 `--write-subs` 时触发翻译（`subtitles` 命令不会翻译）。
 - 每种语言单独保存字幕文件（不合并双语）。
 - 字幕文本会发送到翻译服务。
 

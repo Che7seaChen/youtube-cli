@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - Subtitles are now exported as per-language files only; bilingual SRT merge has been removed.
+- If no subtitles exist, subtitle export is skipped when `--write-subs` is used (download still succeeds).
 
 ## [0.1.2] - 2026-03-14
 
