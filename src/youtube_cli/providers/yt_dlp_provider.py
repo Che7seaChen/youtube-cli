@@ -4,10 +4,12 @@ import contextlib
 import os
 import io
 import json
+import random
 import re
 import shutil
 import ssl
 import sys
+import time
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
@@ -18,7 +20,7 @@ from typing import Any
 import yt_dlp
 import yt_dlp.cookies
 
-from ..config import AuthConfig
+from ..config import AuthConfig, RateLimitConfig, RetryConfig, normalize_mode
 from ..errors import YoutubeCliError, map_provider_error
 from ..normalize import (
     normalize_channel,
@@ -84,8 +86,19 @@ def _parse_retry_sleep_expr(expr: str):
 
 
 class YtDlpProvider:
-    def __init__(self, auth: AuthConfig | None = None, *, no_check_certificate: bool = False) -> None:
+    def __init__(
+        self,
+        auth: AuthConfig | None = None,
+        *,
+        mode: str = "balanced",
+        rate_limit: RateLimitConfig | None = None,
+        retry: RetryConfig | None = None,
+        no_check_certificate: bool = False,
+    ) -> None:
         self.auth = auth
+        self.mode = normalize_mode(mode)
+        self.rate_limit = rate_limit or RateLimitConfig()
+        self.retry = retry or RetryConfig()
         self.no_check_certificate = no_check_certificate
         self._auth_fallback_notice_keys: set[tuple[str, str]] = set()
 
@@ -102,6 +115,45 @@ class YtDlpProvider:
         if self.auth.profile is not None:
             return (self.auth.browser, self.auth.profile)
         return (self.auth.browser,)
+
+
+    def _effective_sleep_interval(self) -> float | None:
+        if self.rate_limit.sleep_interval is not None:
+            return self.rate_limit.sleep_interval
+        if self.mode == "safe":
+            return 1.0
+        if self.mode == "balanced":
+            return 0.4
+        return None
+
+    def _effective_max_sleep_interval(self) -> float | None:
+        if self.rate_limit.max_sleep_interval is not None:
+            return self.rate_limit.max_sleep_interval
+        if self.mode == "safe":
+            return 2.5
+        if self.mode == "balanced":
+            return 1.2
+        return None
+
+    def _effective_task_jitter_seconds(self) -> float:
+        if self.rate_limit.task_jitter_seconds is not None:
+            try:
+                return max(0.0, float(self.rate_limit.task_jitter_seconds))
+            except (TypeError, ValueError):
+                return 0.0
+        if self.mode == "safe":
+            return 1.2
+        if self.mode == "balanced":
+            return 0.3
+        return 0.0
+
+    def _maybe_sleep_between_tasks(self, index: int) -> None:
+        if index <= 0:
+            return
+        jitter = self._effective_task_jitter_seconds()
+        if jitter <= 0:
+            return
+        time.sleep(random.uniform(0.0, jitter))
 
     def _base_opts(self, *, use_auth: bool = True) -> dict[str, Any]:
         opts: dict[str, Any] = {
@@ -128,6 +180,14 @@ class YtDlpProvider:
             components = [item.strip() for item in remote_components.split(",") if item.strip()]
             if components:
                 opts["remote_components"] = components
+        sleep_interval = self._effective_sleep_interval()
+        if sleep_interval is not None:
+            opts["sleep_interval"] = sleep_interval
+            max_sleep_interval = self._effective_max_sleep_interval()
+            if max_sleep_interval is not None:
+                opts["max_sleep_interval"] = max_sleep_interval
+            if self.rate_limit.sleep_interval_requests:
+                opts["sleep_interval_requests"] = self.rate_limit.sleep_interval_requests
         return opts
 
     def _extract(
@@ -187,6 +247,13 @@ class YtDlpProvider:
             "profile": self.auth.profile if self.auth else None,
             "container": self.auth.container if self.auth else None,
             "cookies_file": self.auth.cookies_file if self.auth else None,
+            "mode": self.mode,
+            "rate_limit": {
+                "sleep_interval": self._effective_sleep_interval(),
+                "max_sleep_interval": self._effective_max_sleep_interval(),
+                "sleep_interval_requests": self.rate_limit.sleep_interval_requests,
+                "task_jitter_seconds": self._effective_task_jitter_seconds(),
+            },
             "no_check_certificate": self.no_check_certificate,
         }
 
@@ -580,11 +647,11 @@ class YtDlpProvider:
         return items
 
     def save_to_watch_later(self, target: str, *, dry_run: bool = False) -> dict[str, Any]:
-        client = YoutubeWriteClient(self.auth, no_check_certificate=self.no_check_certificate)
+        client = YoutubeWriteClient(self.auth, mode=self.mode, retry=self.retry, no_check_certificate=self.no_check_certificate)
         return client.add_to_watch_later(target, dry_run=dry_run)
 
     def playlist_add(self, target: str, playlist: str, *, dry_run: bool = False) -> dict[str, Any]:
-        client = YoutubeWriteClient(self.auth, no_check_certificate=self.no_check_certificate)
+        client = YoutubeWriteClient(self.auth, mode=self.mode, retry=self.retry, no_check_certificate=self.no_check_certificate)
         return client.add_to_playlist(target, playlist, dry_run=dry_run)
 
     def playlist_create(
@@ -595,11 +662,11 @@ class YtDlpProvider:
         privacy: str,
         dry_run: bool = False,
     ) -> dict[str, Any]:
-        client = YoutubeWriteClient(self.auth, no_check_certificate=self.no_check_certificate)
+        client = YoutubeWriteClient(self.auth, mode=self.mode, retry=self.retry, no_check_certificate=self.no_check_certificate)
         return client.create_playlist(title, description=description, privacy=privacy, dry_run=dry_run)
 
     def playlist_delete(self, playlist: str, *, dry_run: bool = False) -> dict[str, Any]:
-        client = YoutubeWriteClient(self.auth, no_check_certificate=self.no_check_certificate)
+        client = YoutubeWriteClient(self.auth, mode=self.mode, retry=self.retry, no_check_certificate=self.no_check_certificate)
         return client.delete_playlist(playlist, dry_run=dry_run)
 
     def download(
@@ -657,12 +724,15 @@ class YtDlpProvider:
             audio_only=audio_only,
         )
         opts["format"] = resolved_format_selector
-        if rate_limit:
-            opts["ratelimit"] = rate_limit
-        if throttled_rate:
-            opts["throttledratelimit"] = throttled_rate
-        if http_chunk_size:
-            opts["http_chunk_size"] = http_chunk_size
+        effective_rate_limit = rate_limit or self.rate_limit.download_rate_limit
+        effective_throttled_rate = throttled_rate or self.rate_limit.download_throttled_rate
+        effective_http_chunk_size = http_chunk_size or self.rate_limit.download_http_chunk_size
+        if effective_rate_limit:
+            opts["ratelimit"] = effective_rate_limit
+        if effective_throttled_rate:
+            opts["throttledratelimit"] = effective_throttled_rate
+        if effective_http_chunk_size:
+            opts["http_chunk_size"] = effective_http_chunk_size
         if external_downloader:
             opts["external_downloader"] = {"default": external_downloader}
             if external_downloader_args:
@@ -687,7 +757,8 @@ class YtDlpProvider:
             opts["merge_output_format"] = "mp4"
         tasks: list[dict[str, Any]] = []
         try:
-            for target in targets:
+            for index, target in enumerate(targets):
+                self._maybe_sleep_between_tasks(index)
                 task_id = f"dl_{len(tasks) + 1:03d}"
                 task_key = self._task_key(target, audio_only=audio_only)
                 existing = manifest_entries.get(task_key)

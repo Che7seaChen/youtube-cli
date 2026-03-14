@@ -319,3 +319,51 @@ response:
 - `search`、`favorites`、`subscriptions`、`watch-later`、`history`、`recommendations`、`notifications` 输出 `FeedItem[]`
 - `whoami` 命令输出 `WhoAmI`
 - `playlist-videos` 命令输出 `FeedItem[]`
+
+### Doctor
+
+```yaml
+config_path: "~/.config/youtube-cli/config.json"
+mode:
+  configured: balanced
+  effective: balanced
+rate_limit:
+  sleep_interval: 0.4
+  max_sleep_interval: 1.2
+  sleep_interval_requests: null
+  task_jitter_seconds: 0.3
+retry:
+  write_max_attempts: 2
+  write_backoff_base: 1.0
+  write_backoff_max: 4.0
+checks:
+  - name: ffmpeg
+    status: ok
+    detail: available
+  - name: dns
+    status: ok
+    detail: "www.youtube.com resolved in 32ms"
+  - name: https
+    status: ok
+    detail: "https://www.youtube.com/ HTTP 200 in 120ms"
+  - name: auth
+    status: warn
+    detail: "当前没有可用的登录配置。"
+    hint: "先运行 `youtube login --browser chrome`。"
+metrics:
+  enabled: true
+  total: 12
+  ok: 10
+  fail: 2
+  by_error_code:
+    rate_limited: 1
+    auth_required: 1
+  recent:
+    - ts: "2026-03-14T20:10:00+08:00"
+      command: video
+      ok: false
+      error_code: rate_limited
+      mode: balanced
+      auth_configured: false
+      duration_ms: 1830
+```

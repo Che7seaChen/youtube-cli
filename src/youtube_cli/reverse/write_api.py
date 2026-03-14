@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import http.cookiejar
 import json
+import random
 import re
 import ssl
 import time
@@ -14,7 +15,7 @@ from typing import Any
 
 import yt_dlp.cookies
 
-from ..config import AuthConfig
+from ..config import AuthConfig, RetryConfig, normalize_mode
 from ..errors import YoutubeCliError
 
 YTCFG_RE = re.compile(r"ytcfg\.set\s*\(\s*({.+?})\s*\)\s*;", re.DOTALL)
@@ -84,9 +85,61 @@ class PlaylistDeleteResult:
 
 
 class YoutubeWriteClient:
-    def __init__(self, auth: AuthConfig | None, *, no_check_certificate: bool = False) -> None:
+    def __init__(
+        self,
+        auth: AuthConfig | None,
+        *,
+        mode: str = "balanced",
+        retry: RetryConfig | None = None,
+        no_check_certificate: bool = False,
+    ) -> None:
         self.auth = auth
+        self.mode = normalize_mode(mode)
+        self.retry = retry or RetryConfig()
         self.no_check_certificate = no_check_certificate
+
+
+    def _write_max_attempts(self) -> int:
+        value = self.retry.write_max_attempts if self.retry else 2
+        try:
+            return max(1, int(value))
+        except (TypeError, ValueError):
+            return 2
+
+    def _write_backoff_seconds(self, attempt: int) -> float:
+        base = self.retry.write_backoff_base if self.retry else 1.0
+        max_delay = self.retry.write_backoff_max if self.retry else 4.0
+        try:
+            base = float(base)
+            max_delay = float(max_delay)
+        except (TypeError, ValueError):
+            base = 1.0
+            max_delay = 4.0
+        delay = min(base * (2 ** max(attempt - 1, 0)), max_delay)
+        jitter = min(0.5, delay * 0.1)
+        return delay + random.uniform(0.0, jitter)
+
+    def _execute_with_retry(self, action: str, fn):
+        attempts = self._write_max_attempts()
+        last_exc: Exception | None = None
+        for attempt in range(1, attempts + 1):
+            try:
+                return fn()
+            except YoutubeCliError as exc:
+                if exc.code in {"auth_required", "permission_denied"}:
+                    raise
+                last_exc = exc
+            except Exception as exc:
+                last_exc = exc
+            if attempt < attempts:
+                time.sleep(self._write_backoff_seconds(attempt))
+        if last_exc:
+            raise last_exc
+        raise YoutubeCliError(
+            "provider_error",
+            f"{action} failed without details",
+            source="youtube_write",
+        )
 
     def add_to_watch_later(self, target: str, *, dry_run: bool) -> dict[str, Any]:
         return self.add_to_playlist(target, "WL", dry_run=dry_run)
@@ -170,67 +223,77 @@ class YoutubeWriteClient:
         endpoint_path: str,
         body: dict[str, Any],
     ) -> dict[str, Any]:
-        cookie_jar = self._load_cookie_jar()
-        opener = self._build_opener(cookie_jar)
-        html = self._fetch_html(referrer, opener=opener)
-        ytcfg = self._extract_ytcfg(html)
-        api_key = ytcfg.get("INNERTUBE_API_KEY")
-        context = ytcfg.get("INNERTUBE_CONTEXT")
-        if not api_key or not isinstance(context, dict):
-            raise YoutubeCliError(
-                "provider_error",
-                "未能从 YouTube 页面提取写接口所需的 ytcfg 信息。",
-                hint="重试 `youtube login --browser chrome --check`，确认当前登录态可用。",
-                source="youtube_write",
+        def do_call() -> dict[str, Any]:
+            cookie_jar = self._load_cookie_jar()
+            opener = self._build_opener(cookie_jar)
+            html = self._fetch_html(referrer, opener=opener)
+            ytcfg = self._extract_ytcfg(html)
+            api_key = ytcfg.get("INNERTUBE_API_KEY")
+            context = ytcfg.get("INNERTUBE_CONTEXT")
+            if not api_key or not isinstance(context, dict):
+                raise YoutubeCliError(
+                    "provider_error",
+                    "未能从 YouTube 页面提取写接口所需的 ytcfg 信息。",
+                    hint="重试 `youtube login --browser chrome --check`，确认当前登录态可用。",
+                    source="youtube_write",
+                )
+            endpoint = f"https://www.youtube.com/youtubei/v1/{endpoint_path}?key={api_key}&prettyPrint=false"
+            payload = json.dumps({"context": context, **body}).encode("utf-8")
+            headers = self._generate_api_headers(cookie_jar, ytcfg=ytcfg, origin="https://www.youtube.com")
+            headers.update(
+                {
+                    "Content-Type": "application/json",
+                    "Referer": referrer,
+                }
             )
-        endpoint = f"https://www.youtube.com/youtubei/v1/{endpoint_path}?key={api_key}&prettyPrint=false"
-        payload = json.dumps({"context": context, **body}).encode("utf-8")
-        headers = self._generate_api_headers(cookie_jar, ytcfg=ytcfg, origin="https://www.youtube.com")
-        headers.update(
-            {
-                "Content-Type": "application/json",
-                "Referer": referrer,
-            }
-        )
-        request = urllib.request.Request(endpoint, data=payload, headers=headers, method="POST")
-        try:
-            with opener.open(request) as response:
-                raw = response.read().decode("utf-8", errors="replace")
-        except urllib.error.HTTPError as exc:
-            body_text = exc.read().decode("utf-8", errors="replace")
-            raise YoutubeCliError(
-                "permission_denied" if exc.code == 403 else "provider_error",
-                f"YouTube 写接口请求失败: HTTP {exc.code}",
-                hint=body_text[:200] or "检查登录态是否有效，以及目标播放列表是否可写。",
-                source="youtube_write",
-            ) from exc
-        except Exception as exc:
-            raise YoutubeCliError(
-                "network_error",
-                "调用 YouTube 写接口时遇到网络错误。",
-                hint="检查网络连通性，或在可访问 YouTube 的环境中重试。",
-                source="youtube_write",
-            ) from exc
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError as exc:
-            raise YoutubeCliError(
-                "provider_error",
-                "YouTube 写接口返回了无法解析的响应。",
-                hint=raw[:200],
-                source="youtube_write",
-            ) from exc
-        if data.get("error"):
-            message = (
-                data.get("error", {}).get("message")
-                or data.get("error", {}).get("errors", [{}])[0].get("message")
-            )
-            raise YoutubeCliError(
-                "provider_error",
-                message or "YouTube 写接口返回错误。",
-                source="youtube_write",
-            )
-        return data
+            request = urllib.request.Request(endpoint, data=payload, headers=headers, method="POST")
+            try:
+                with opener.open(request) as response:
+                    raw = response.read().decode("utf-8", errors="replace")
+            except urllib.error.HTTPError as exc:
+                body_text = exc.read().decode("utf-8", errors="replace")
+                if exc.code == 429:
+                    raise YoutubeCliError(
+                        "rate_limited",
+                        "YouTube 写接口触发限流。",
+                        hint="稍后重试，或降低写操作频率。",
+                        source="youtube_write",
+                    ) from exc
+                raise YoutubeCliError(
+                    "permission_denied" if exc.code == 403 else "provider_error",
+                    f"YouTube 写接口请求失败: HTTP {exc.code}",
+                    hint=body_text[:200] or "检查登录态是否有效，以及目标播放列表是否可写。",
+                    source="youtube_write",
+                ) from exc
+            except Exception as exc:
+                raise YoutubeCliError(
+                    "network_error",
+                    "调用 YouTube 写接口时遇到网络错误。",
+                    hint="检查网络连通性，或在可访问 YouTube 的环境中重试。",
+                    source="youtube_write",
+                ) from exc
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError as exc:
+                raise YoutubeCliError(
+                    "provider_error",
+                    "YouTube 写接口返回了无法解析的响应。",
+                    hint=raw[:200],
+                    source="youtube_write",
+                ) from exc
+            if data.get("error"):
+                message = (
+                    data.get("error", {}).get("message")
+                    or data.get("error", {}).get("errors", [{}])[0].get("message")
+                )
+                raise YoutubeCliError(
+                    "provider_error",
+                    message or "YouTube 写接口返回错误。",
+                    source="youtube_write",
+                )
+            return data
+
+        return self._execute_with_retry("youtube_write", do_call)
 
     def _playlist_edit(
         self,
@@ -239,93 +302,105 @@ class YoutubeWriteClient:
         playlist_id: str,
         actions: list[dict[str, Any]],
     ) -> dict[str, Any]:
-        cookie_jar = self._load_cookie_jar()
-        opener = self._build_opener(cookie_jar)
-        html = self._fetch_html(referrer, opener=opener)
-        ytcfg = self._extract_ytcfg(html)
-        api_key = ytcfg.get("INNERTUBE_API_KEY")
-        context = ytcfg.get("INNERTUBE_CONTEXT")
-        if not api_key or not isinstance(context, dict):
-            raise YoutubeCliError(
-                "provider_error",
-                "未能从 YouTube 页面提取写接口所需的 ytcfg 信息。",
-                hint="重试 `youtube login --browser chrome --check`，确认当前登录态可用。",
-                source="youtube_write",
-            )
-        endpoint = f"https://www.youtube.com/youtubei/v1/browse/edit_playlist?key={api_key}&prettyPrint=false"
-        payload = json.dumps(
-            {
-                "context": context,
-                "playlistId": playlist_id,
-                "actions": actions,
-            }
-        ).encode("utf-8")
-        headers = self._generate_api_headers(cookie_jar, ytcfg=ytcfg, origin="https://www.youtube.com")
-        headers.update(
-            {
-                "Content-Type": "application/json",
-                "Referer": referrer,
-            }
-        )
-        request = urllib.request.Request(endpoint, data=payload, headers=headers, method="POST")
-        try:
-            with opener.open(request) as response:
-                raw = response.read().decode("utf-8", errors="replace")
-        except urllib.error.HTTPError as exc:
-            body = exc.read().decode("utf-8", errors="replace")
-            if exc.code == 409 and self._is_add_video_conflict(actions):
-                return {
-                    "status": "STATUS_ALREADY_EXISTS",
-                    "responseContext": {
-                        "mainAppWebResponseContext": {
-                            "loggedOut": False,
-                        }
-                    },
-                    "error": self._summarize_http_error(body),
+        def do_call() -> dict[str, Any]:
+            cookie_jar = self._load_cookie_jar()
+            opener = self._build_opener(cookie_jar)
+            html = self._fetch_html(referrer, opener=opener)
+            ytcfg = self._extract_ytcfg(html)
+            api_key = ytcfg.get("INNERTUBE_API_KEY")
+            context = ytcfg.get("INNERTUBE_CONTEXT")
+            if not api_key or not isinstance(context, dict):
+                raise YoutubeCliError(
+                    "provider_error",
+                    "未能从 YouTube 页面提取写接口所需的 ytcfg 信息。",
+                    hint="重试 `youtube login --browser chrome --check`，确认当前登录态可用。",
+                    source="youtube_write",
+                )
+            endpoint = f"https://www.youtube.com/youtubei/v1/browse/edit_playlist?key={api_key}&prettyPrint=false"
+            payload = json.dumps(
+                {
+                    "context": context,
+                    "playlistId": playlist_id,
+                    "actions": actions,
                 }
-            playlist_context = self._describe_playlist_target(playlist_id, opener=opener)
-            hint_parts: list[str] = []
-            if playlist_context.get("title"):
-                hint_parts.append(f"目标 playlist: {playlist_context['title']}")
-            if playlist_context.get("owner"):
-                hint_parts.append(f"页面所有者: {playlist_context['owner']}")
-            if exc.code == 403:
-                hint_parts.append("如果这是你收藏的别人的 playlist，而不是当前账号自建列表，YouTube 会返回 403。请改传你自己的 playlist URL/ID。")
-            if body:
-                hint_parts.append(body[:200])
-            raise YoutubeCliError(
-                "permission_denied" if exc.code == 403 else "provider_error",
-                f"YouTube 写接口请求失败: HTTP {exc.code}",
-                hint=" ".join(hint_parts) or "检查登录态是否有效，以及目标播放列表是否可写。",
-                source="youtube_write",
-            ) from exc
-        except Exception as exc:
-            raise YoutubeCliError(
-                "network_error",
-                "调用 YouTube 写接口时遇到网络错误。",
-                hint="检查网络连通性，或在可访问 YouTube 的环境中重试。",
-                source="youtube_write",
-            ) from exc
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError as exc:
-            raise YoutubeCliError(
-                "provider_error",
-                "YouTube 写接口返回了无法解析的响应。",
-                hint=raw[:200],
-                source="youtube_write",
-            ) from exc
-        if data.get("error"):
-            message = (
-                data.get("error", {}).get("message")
-                or data.get("error", {}).get("errors", [{}])[0].get("message")
+            ).encode("utf-8")
+            headers = self._generate_api_headers(cookie_jar, ytcfg=ytcfg, origin="https://www.youtube.com")
+            headers.update(
+                {
+                    "Content-Type": "application/json",
+                    "Referer": referrer,
+                }
             )
-            raise YoutubeCliError(
-                "provider_error",
-                message or "YouTube 写接口返回错误。",
-                source="youtube_write",
-            )
-        return data
+            request = urllib.request.Request(endpoint, data=payload, headers=headers, method="POST")
+            try:
+                with opener.open(request) as response:
+                    raw = response.read().decode("utf-8", errors="replace")
+            except urllib.error.HTTPError as exc:
+                body = exc.read().decode("utf-8", errors="replace")
+                if exc.code == 409 and self._is_add_video_conflict(actions):
+                    return {
+                        "status": "STATUS_ALREADY_EXISTS",
+                        "responseContext": {
+                            "mainAppWebResponseContext": {
+                                "loggedOut": False,
+                            }
+                        },
+                        "error": self._summarize_http_error(body),
+                    }
+                if exc.code == 429:
+                    raise YoutubeCliError(
+                        "rate_limited",
+                        "YouTube 写接口触发限流。",
+                        hint="稍后重试，或降低写操作频率。",
+                        source="youtube_write",
+                    ) from exc
+                playlist_context = self._describe_playlist_target(playlist_id, opener=opener)
+                hint_parts: list[str] = []
+                if playlist_context.get("title"):
+                    hint_parts.append(f"目标 playlist: {playlist_context['title']}")
+                if playlist_context.get("owner"):
+                    hint_parts.append(f"页面所有者: {playlist_context['owner']}")
+                if exc.code == 403:
+                    hint_parts.append(
+                        "如果这是你收藏的别人的 playlist，而不是当前账号自建列表，YouTube 会返回 403。请改传你自己的 playlist URL/ID。"
+                    )
+                if body:
+                    hint_parts.append(body[:200])
+                raise YoutubeCliError(
+                    "permission_denied" if exc.code == 403 else "provider_error",
+                    f"YouTube 写接口请求失败: HTTP {exc.code}",
+                    hint=" ".join(hint_parts) or "检查登录态是否有效，以及目标播放列表是否可写。",
+                    source="youtube_write",
+                ) from exc
+            except Exception as exc:
+                raise YoutubeCliError(
+                    "network_error",
+                    "调用 YouTube 写接口时遇到网络错误。",
+                    hint="检查网络连通性，或在可访问 YouTube 的环境中重试。",
+                    source="youtube_write",
+                ) from exc
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError as exc:
+                raise YoutubeCliError(
+                    "provider_error",
+                    "YouTube 写接口返回了无法解析的响应。",
+                    hint=raw[:200],
+                    source="youtube_write",
+                ) from exc
+            if data.get("error"):
+                message = (
+                    data.get("error", {}).get("message")
+                    or data.get("error", {}).get("errors", [{}])[0].get("message")
+                )
+                raise YoutubeCliError(
+                    "provider_error",
+                    message or "YouTube 写接口返回错误。",
+                    source="youtube_write",
+                )
+            return data
+
+        return self._execute_with_retry("youtube_write", do_call)
 
     def _summarize_response(self, response: dict[str, Any]) -> dict[str, Any]:
         summary: dict[str, Any] = {

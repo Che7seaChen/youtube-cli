@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0] - 2026-03-14
+
+### Added
+
+- Added risk-control modes (`--mode safe|balanced|fast`) and default request pacing for stability.
+- Added `youtube doctor` for environment/auth diagnostics and recent error metrics.
+- Added local metrics tracking for command success/failure (no URL logging).
+
+### Changed
+
+- Applied request sleep intervals to yt-dlp read flows and task-level jitter for batch downloads.
+- Added retry/backoff for write APIs and explicit rate-limited handling on write calls.
+- Status output now surfaces risk-control configuration.
+
 ## [0.1.3] - 2026-03-14
 
 ### Added

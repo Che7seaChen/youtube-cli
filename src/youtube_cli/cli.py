@@ -3,30 +3,56 @@ from __future__ import annotations
 import os
 import shlex
 import shutil
+import socket
 import subprocess
 import sys
+import time
+import urllib.error
+import urllib.request
 import webbrowser
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
 import click
 
-from .config import AppConfig, AuthConfig, auth_summary, config_path, env_flag, load_config, save_config
+from .config import (
+    AppConfig,
+    AuthConfig,
+    auth_summary,
+    config_path,
+    env_flag,
+    load_config,
+    normalize_mode,
+    save_config,
+)
 from .errors import YoutubeCliError
+from .metrics import record_metric, summarize_metrics
 from .output import OutputFormat, emit, emit_error, resolve_output_format
 from .providers import YtDlpProvider
 
 
 class AppContext:
-    def __init__(self, output_format: OutputFormat, config: AppConfig, *, no_check_certificate: bool = False) -> None:
+    def __init__(
+        self,
+        output_format: OutputFormat,
+        config: AppConfig,
+        *,
+        mode: str,
+        no_check_certificate: bool = False,
+    ) -> None:
         self.output_format = output_format
         self.config = config
+        self.mode = normalize_mode(mode)
         self.no_check_certificate = no_check_certificate
 
     @property
     def provider(self) -> YtDlpProvider:
         return YtDlpProvider(
             self.config.auth,
+            mode=self.mode,
+            rate_limit=self.config.rate_limit,
+            retry=self.config.retry,
             no_check_certificate=self.no_check_certificate,
         )
 
@@ -44,12 +70,69 @@ def _batch_targets(targets: tuple[str, ...], batch_file: str | None) -> list[str
     return collected
 
 
+def _resolve_download_settings(
+    ctx: AppContext,
+    *,
+    rate_limit: str | None,
+    throttled_rate: str | None,
+    http_chunk_size: str | None,
+    concurrent_fragments: int,
+    fragment_retries: int,
+) -> dict[str, Any]:
+    param_source = click.get_current_context().get_parameter_source
+    config = ctx.config.rate_limit
+
+    def is_default(name: str) -> bool:
+        return param_source(name) == click.core.ParameterSource.DEFAULT
+
+    if is_default("rate_limit") and rate_limit is None and config.download_rate_limit:
+        rate_limit = config.download_rate_limit
+    if is_default("throttled_rate") and throttled_rate is None and config.download_throttled_rate:
+        throttled_rate = config.download_throttled_rate
+    if is_default("http_chunk_size") and http_chunk_size is None and config.download_http_chunk_size:
+        http_chunk_size = config.download_http_chunk_size
+    if is_default("concurrent_fragments"):
+        if config.download_concurrent_fragments is not None:
+            concurrent_fragments = config.download_concurrent_fragments
+        elif ctx.mode == "safe":
+            concurrent_fragments = min(concurrent_fragments, 1)
+    if is_default("fragment_retries") and config.download_fragment_retries is not None:
+        fragment_retries = config.download_fragment_retries
+
+    return {
+        "rate_limit": rate_limit,
+        "throttled_rate": throttled_rate,
+        "http_chunk_size": http_chunk_size,
+        "concurrent_fragments": concurrent_fragments,
+        "fragment_retries": fragment_retries,
+    }
+
+
 def _run(ctx: AppContext, command: str, fn: Any) -> None:
+    started = time.monotonic()
     try:
         data = fn()
     except YoutubeCliError as exc:
+        duration_ms = int((time.monotonic() - started) * 1000)
+        record_metric(
+            command=command,
+            ok=False,
+            error_code=exc.code,
+            mode=ctx.mode,
+            auth_configured=ctx.config.auth is not None,
+            duration_ms=duration_ms,
+        )
         emit_error(exc, command=command, output_format=ctx.output_format)
         return
+    duration_ms = int((time.monotonic() - started) * 1000)
+    record_metric(
+        command=command,
+        ok=True,
+        error_code=None,
+        mode=ctx.mode,
+        auth_configured=ctx.config.auth is not None,
+        duration_ms=duration_ms,
+    )
     emit(data, command=command, output_format=ctx.output_format)
 
 
@@ -64,6 +147,66 @@ def _run_silently(cmd: list[str]) -> bool:
         return True
     except Exception:
         return False
+
+
+def _dependency_check(name: str, available: bool, *, hint: str | None = None) -> dict[str, Any]:
+    return {
+        "name": name,
+        "status": "ok" if available else "warn",
+        "detail": "available" if available else "missing",
+        "hint": None if available else hint,
+    }
+
+
+def _probe_dns(host: str) -> dict[str, Any]:
+    start = time.monotonic()
+    try:
+        socket.getaddrinfo(host, 443)
+        latency_ms = int((time.monotonic() - start) * 1000)
+        return {
+            "name": "dns",
+            "status": "ok",
+            "detail": f"{host} resolved in {latency_ms}ms",
+        }
+    except Exception as exc:
+        return {
+            "name": "dns",
+            "status": "fail",
+            "detail": str(exc),
+            "hint": "检查 DNS 或网络连通性。",
+        }
+
+
+def _probe_https(url: str) -> dict[str, Any]:
+    start = time.monotonic()
+    try:
+        request = urllib.request.Request(url, method="HEAD")
+        with urllib.request.urlopen(request, timeout=6) as response:
+            status = response.status
+        latency_ms = int((time.monotonic() - start) * 1000)
+        level = "ok" if 200 <= status < 400 else "warn"
+        return {
+            "name": "https",
+            "status": level,
+            "detail": f"{url} HTTP {status} in {latency_ms}ms",
+        }
+    except urllib.error.HTTPError as exc:
+        latency_ms = int((time.monotonic() - start) * 1000)
+        level = "warn" if exc.code in {403, 429} else "fail"
+        hint = "可能触发限流或需要登录。" if exc.code in {403, 429} else "检查网络或代理设置。"
+        return {
+            "name": "https",
+            "status": level,
+            "detail": f"{url} HTTP {exc.code} in {latency_ms}ms",
+            "hint": hint,
+        }
+    except Exception as exc:
+        return {
+            "name": "https",
+            "status": "fail",
+            "detail": str(exc),
+            "hint": "检查网络或代理设置。",
+        }
 
 
 def _open_incognito(browser: str, url: str) -> bool:
@@ -165,15 +308,24 @@ def _require_write_confirmation(yes: bool, dry_run: bool) -> None:
 @click.option("--json", "as_json", is_flag=True, help="输出 JSON envelope。")
 @click.option("--yaml", "as_yaml", is_flag=True, help="输出 YAML envelope。")
 @click.option(
+    "--mode",
+    type=click.Choice(["safe", "balanced", "fast"]),
+    default=None,
+    help="风控模式：safe 更稳，fast 更快，balanced 默认。",
+)
+@click.option(
     "--no-check-certificate",
     is_flag=True,
     help="跳过 TLS 证书校验。仅在受限网络或本机证书链异常时使用。",
 )
-def main(as_json: bool, as_yaml: bool, no_check_certificate: bool) -> None:
+def main(as_json: bool, as_yaml: bool, mode: str | None, no_check_certificate: bool) -> None:
     output_format = resolve_output_format(as_json, as_yaml)
+    config = load_config()
+    resolved_mode = normalize_mode(mode or config.mode)
     context = AppContext(
         output_format,
-        load_config(),
+        config,
+        mode=resolved_mode,
         no_check_certificate=no_check_certificate or env_flag("YOUTUBE_CLI_NO_CHECK_CERTIFICATE"),
     )
     click.get_current_context().obj = context
@@ -186,6 +338,12 @@ def status(ctx: AppContext, check: bool) -> None:
     def action() -> dict[str, Any]:
         data = {
             "config_path": str(config_path()),
+            "mode": {
+                "configured": ctx.config.mode,
+                "effective": ctx.mode,
+            },
+            "rate_limit": asdict(ctx.config.rate_limit),
+            "retry": asdict(ctx.config.retry),
             "auth": auth_summary(ctx.config.auth),
             "provider": ctx.provider.status(),
         }
@@ -194,6 +352,66 @@ def status(ctx: AppContext, check: bool) -> None:
         return data
 
     _run(ctx, "status", action)
+
+
+@main.command()
+@click.option("--check-auth/--no-check-auth", default=True, show_default=True, help="检测当前登录态是否有效。")
+@pass_context
+def doctor(ctx: AppContext, check_auth: bool) -> None:
+    def action() -> dict[str, Any]:
+        provider_status = ctx.provider.status()
+        checks: list[dict[str, Any]] = []
+        checks.append(
+            _dependency_check(
+                "ffmpeg",
+                provider_status.get("ffmpeg_available", False),
+                hint="安装 ffmpeg 后可提升下载与转码稳定性。",
+            )
+        )
+        checks.append(
+            _dependency_check(
+                "ffprobe",
+                provider_status.get("ffprobe_available", False),
+                hint="安装 ffprobe 可提升媒体信息探测能力。",
+            )
+        )
+        checks.append(
+            _dependency_check(
+                "aria2c",
+                provider_status.get("aria2c_available", False),
+                hint="可选安装，用于提升部分下载场景的速度。",
+            )
+        )
+        checks.append(_probe_dns("www.youtube.com"))
+        checks.append(_probe_https("https://www.youtube.com/"))
+        if check_auth:
+            try:
+                auth_info = ctx.provider.validate_auth()
+                checks.append({"name": "auth", "status": "ok", "detail": auth_info})
+            except YoutubeCliError as exc:
+                level = "warn" if exc.code == "auth_required" else "fail"
+                checks.append(
+                    {
+                        "name": "auth",
+                        "status": level,
+                        "detail": exc.message,
+                        "hint": exc.hint,
+                        "code": exc.code,
+                    }
+                )
+        return {
+            "config_path": str(config_path()),
+            "mode": {
+                "configured": ctx.config.mode,
+                "effective": ctx.mode,
+            },
+            "rate_limit": asdict(ctx.config.rate_limit),
+            "retry": asdict(ctx.config.retry),
+            "checks": checks,
+            "metrics": summarize_metrics(),
+        }
+
+    _run(ctx, "doctor", action)
 
 
 @main.command()
@@ -646,6 +864,14 @@ def playlist_download(
                 hint="检查 playlist URL/ID 是否正确，或对私有 playlist 加 `--use-auth`。",
                 source="youtube_cli",
             )
+        settings = _resolve_download_settings(
+            ctx,
+            rate_limit=rate_limit,
+            throttled_rate=throttled_rate,
+            http_chunk_size=http_chunk_size,
+            concurrent_fragments=concurrent_fragments,
+            fragment_retries=fragment_retries,
+        )
         tasks = ctx.provider.download(
             targets,
             output_dir=output_dir,
@@ -656,11 +882,11 @@ def playlist_download(
             subtitle_file_format=subtitle_format,
             prefer_auto_subtitles=prefer_auto_subs,
             use_auth=use_auth,
-            rate_limit=rate_limit,
-            throttled_rate=throttled_rate,
-            http_chunk_size=http_chunk_size,
-            concurrent_fragments=concurrent_fragments,
-            fragment_retries=fragment_retries,
+            rate_limit=settings["rate_limit"],
+            throttled_rate=settings["throttled_rate"],
+            http_chunk_size=settings["http_chunk_size"],
+            concurrent_fragments=settings["concurrent_fragments"],
+            fragment_retries=settings["fragment_retries"],
             external_downloader=external_downloader,
             external_downloader_args=shlex.split(downloader_args) if downloader_args else None,
             manifest_path=manifest_path,
@@ -766,6 +992,14 @@ def download(
     if quality and parameter_source != click.core.ParameterSource.DEFAULT:
         raise click.ClickException("`--quality` 和 `--format` 只能二选一。")
     resolved_targets = _batch_targets(targets, batch_file)
+    settings = _resolve_download_settings(
+        ctx,
+        rate_limit=rate_limit,
+        throttled_rate=throttled_rate,
+        http_chunk_size=http_chunk_size,
+        concurrent_fragments=concurrent_fragments,
+        fragment_retries=fragment_retries,
+    )
     _run(
         ctx,
         "download",
@@ -779,11 +1013,11 @@ def download(
             subtitle_file_format=subtitle_format,
             prefer_auto_subtitles=prefer_auto_subs,
             use_auth=use_auth,
-            rate_limit=rate_limit,
-            throttled_rate=throttled_rate,
-            http_chunk_size=http_chunk_size,
-            concurrent_fragments=concurrent_fragments,
-            fragment_retries=fragment_retries,
+            rate_limit=settings["rate_limit"],
+            throttled_rate=settings["throttled_rate"],
+            http_chunk_size=settings["http_chunk_size"],
+            concurrent_fragments=settings["concurrent_fragments"],
+            fragment_retries=settings["fragment_retries"],
             external_downloader=external_downloader,
             external_downloader_args=shlex.split(downloader_args) if downloader_args else None,
             manifest_path=manifest_path,
@@ -873,6 +1107,14 @@ def audio(
     resume_failed: bool,
 ) -> None:
     resolved_targets = _batch_targets(targets, batch_file)
+    settings = _resolve_download_settings(
+        ctx,
+        rate_limit=rate_limit,
+        throttled_rate=throttled_rate,
+        http_chunk_size=http_chunk_size,
+        concurrent_fragments=concurrent_fragments,
+        fragment_retries=fragment_retries,
+    )
     _run(
         ctx,
         "audio",
@@ -886,11 +1128,11 @@ def audio(
             subtitle_file_format=subtitle_format,
             prefer_auto_subtitles=prefer_auto_subs,
             use_auth=use_auth,
-            rate_limit=rate_limit,
-            throttled_rate=throttled_rate,
-            http_chunk_size=http_chunk_size,
-            concurrent_fragments=concurrent_fragments,
-            fragment_retries=fragment_retries,
+            rate_limit=settings["rate_limit"],
+            throttled_rate=settings["throttled_rate"],
+            http_chunk_size=settings["http_chunk_size"],
+            concurrent_fragments=settings["concurrent_fragments"],
+            fragment_retries=settings["fragment_retries"],
             external_downloader=external_downloader,
             external_downloader_args=shlex.split(downloader_args) if downloader_args else None,
             manifest_path=manifest_path,

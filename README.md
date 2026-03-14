@@ -84,6 +84,11 @@ youtube download "https://www.youtube.com/watch?v=VIDEO_ID"   --write-subs --sub
 youtube --json video "https://www.youtube.com/watch?v=VIDEO_ID"
 ```
 
+## Risk Control
+
+- `--mode safe|balanced|fast` controls request pacing. `safe` prioritizes stability, `fast` prioritizes speed, `balanced` is default.
+- `youtube doctor` runs environment checks (network, dependencies, auth) to reduce avoidable failures.
+
 ## Command Reference
 
 **Discovery**
@@ -122,6 +127,7 @@ youtube --json video "https://www.youtube.com/watch?v=VIDEO_ID"
 | --- | --- | --- |
 | `login` | Configure auth | `youtube login --browser chrome --check` |
 | `status` | Auth status | `youtube status --check` |
+| `doctor` | Environment check | `youtube doctor` |
 | `whoami` | Auth capabilities | `youtube whoami` |
 | `subscriptions` | Subscriptions feed | `youtube subscriptions --limit 20` |
 | `favorites` | Favorites feed | `youtube favorites --limit 20` |
@@ -263,6 +269,12 @@ youtube download "https://www.youtube.com/watch?v=VIDEO_ID"   --write-subs --sub
 youtube --json video "https://www.youtube.com/watch?v=VIDEO_ID"
 ```
 
+## 风控与诊断
+
+- `--mode safe|balanced|fast` 控制请求节奏；`safe` 更稳，`fast` 更快，默认 `balanced`。
+- `youtube doctor` 进行网络/依赖/登录态检查，减少可避免的失败与风控触发。
+- `doctor` 输出最近请求的错误统计（不记录 URL）。
+
 ## 命令参考
 
 **检索与列表**
@@ -301,6 +313,7 @@ youtube --json video "https://www.youtube.com/watch?v=VIDEO_ID"
 | --- | --- | --- |
 | `login` | 配置认证 | `youtube login --browser chrome --check` |
 | `status` | 认证状态 | `youtube status --check` |
+| `doctor` | 环境诊断 | `youtube doctor` |
 | `whoami` | 能力检测 | `youtube whoami` |
 | `subscriptions` | 订阅列表 | `youtube subscriptions --limit 20` |
 | `favorites` | 收藏列表 | `youtube favorites --limit 20` |
