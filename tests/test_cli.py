@@ -33,16 +33,16 @@ class FakeProvider:
             "homepage": {"reachable": True, "sign_in_visible": False},
         }
 
-    def video(self, target: str):
+    def video(self, target: str, *, use_auth: bool = False):
         return {"id": "abc123", "title": f"video:{target}"}
 
-    def comments(self, target: str, *, limit: int = 20, sort: str = "top"):
+    def comments(self, target: str, *, limit: int = 20, sort: str = "top", use_auth: bool = False):
         return [{"id": "c1", "text": "hello", "author": "tester", "limit": limit, "sort": sort}]
 
     def related(self, target: str, *, limit: int = 20):
         return [{"id": "r1", "title": "next video", "limit": limit}]
 
-    def formats(self, target: str):
+    def formats(self, target: str, *, use_auth: bool = False):
         return {"video_id": "abc123", "formats": [{"format_id": "18"}]}
 
     def subtitles(self, target: str, *, language=None, auto=False, use_auth=False):
