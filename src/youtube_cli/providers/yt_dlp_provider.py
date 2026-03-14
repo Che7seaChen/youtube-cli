@@ -214,7 +214,7 @@ class YtDlpProvider:
             raise YoutubeCliError("provider_error", "yt-dlp 返回了无法识别的数据结构。", source="yt_dlp")
         return info
 
-    def _extract_with_auth_fallback(self, target: str, *, use_auth: bool) -> dict[str, Any]:
+    def _extract_with_auth_fallback(self, target: str, *, use_auth: bool, **extra: Any) -> dict[str, Any]:
         try:
             if use_auth:
                 return self._call_silently(
@@ -223,14 +223,15 @@ class YtDlpProvider:
                     use_auth=True,
                     quiet=True,
                     no_warnings=True,
+                    **extra,
                 )
-            return self._extract(target, use_auth=False)
+            return self._extract(target, use_auth=False, **extra)
         except YoutubeCliError as exc:
             if not (use_auth and self._should_retry_without_auth(exc)):
                 raise
             self._emit_auth_fallback_notice(stage="提取字幕/视频信息", reason=exc.message)
             try:
-                return self._extract(target, use_auth=False)
+                return self._extract(target, use_auth=False, **extra)
             except YoutubeCliError:
                 raise exc
 
@@ -333,10 +334,10 @@ class YtDlpProvider:
         return status
 
     def video(self, target: str, *, use_auth: bool = False) -> dict[str, Any]:
-        return normalize_video(self._extract(target, use_auth=use_auth))
+        return normalize_video(self._extract_with_auth_fallback(target, use_auth=use_auth))
 
     def formats(self, target: str, *, use_auth: bool = False) -> dict[str, Any]:
-        return normalize_formats(self._extract(target, use_auth=use_auth))
+        return normalize_formats(self._extract_with_auth_fallback(target, use_auth=use_auth))
 
     def subtitles(
         self,
@@ -518,7 +519,12 @@ class YtDlpProvider:
         return self._channel_tab(target, tab="playlists", limit=limit)
 
     def playlist(self, target: str, *, limit: int = 20, use_auth: bool = False) -> dict[str, Any]:
-        return normalize_playlist(self._extract(self._playlist_url(target), flat=True, use_auth=use_auth), limit=limit)
+        info = self._extract_with_auth_fallback(
+            self._playlist_url(target),
+            flat=True,
+            use_auth=use_auth,
+        )
+        return normalize_playlist(info, limit=limit)
 
     def playlist_videos(
         self,
@@ -527,7 +533,7 @@ class YtDlpProvider:
         limit: int | None = 20,
         use_auth: bool = False,
     ) -> list[dict[str, Any]]:
-        info = self._extract(self._playlist_url(target), flat=True, use_auth=use_auth)
+        info = self._extract_with_auth_fallback(self._playlist_url(target), flat=True, use_auth=use_auth)
         entries = list(info.get("entries") or [])
         if limit is not None:
             entries = entries[:limit]
@@ -563,7 +569,7 @@ class YtDlpProvider:
         sort: str = "top",
         use_auth: bool = False,
     ) -> list[dict[str, Any]]:
-        info = self._extract(
+        info = self._extract_with_auth_fallback(
             target,
             use_auth=use_auth,
             getcomments=True,
@@ -870,7 +876,11 @@ class YtDlpProvider:
                 raise exc
 
     def _should_retry_without_auth(self, exc: YoutubeCliError) -> bool:
-        return exc.code == "provider_error" and "page needs to be reloaded" in exc.message.lower()
+        if exc.code == "provider_error" and "page needs to be reloaded" in exc.message.lower():
+            return True
+        if exc.code == "unsupported_operation":
+            return True
+        return False
 
     def _silent_auth_attempt_opts(self, opts: dict[str, Any]) -> dict[str, Any]:
         auth_opts = dict(opts)
